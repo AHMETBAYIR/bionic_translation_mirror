@@ -67,3 +67,18 @@ char *bionic_setlocale(int category, const char *locale)
 		return NULL;
 	}
 }
+
+char *bionic_getenv(const char *name) {
+	if(!name) {
+		printf("!!! NULL passed to %s\n", __func__);
+	}
+
+	if(!strcmp(name, "HOME"))
+		return NULL;
+
+	/* no point returning anything else, apps mix this with using hardcoded paths */
+	if(!strcmp(name, "ANDROID_ROOT"))
+		return "/system";
+
+	return getenv(name);
+}
