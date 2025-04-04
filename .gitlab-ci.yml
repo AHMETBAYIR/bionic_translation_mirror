@@ -1,4 +1,6 @@
 trigger_job:
+  rules:
+    - if: ($CI_PIPELINE_SOURCE != "merge_request_event") && ($CI_COMMIT_BRANCH == 'master')
   variables:
     # the build script assumes it's run from a MR context
     CI_MERGE_REQUEST_TARGET_BRANCH_NAME: master
