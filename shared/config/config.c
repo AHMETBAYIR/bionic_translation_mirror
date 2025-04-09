@@ -6,29 +6,28 @@
 
 #include "config.h"
 
-#define LIB_OVERRIDE_MAP_DEFAULT_SIZE 8
-struct lib_override *lib_override_map = NULL;
-size_t lib_override_map_len = 0;
-static size_t lib_override_map_size = 0;
+#define OVERRIDE_MAP_DEFAULT_SIZE 8
 
-static void lib_override_map_append(char *from, char *to)
+static void override_map_append(struct override_map *map, char *from, char *to)
 {
-	if(!lib_override_map) {
-		lib_override_map_size = LIB_OVERRIDE_MAP_DEFAULT_SIZE;
-		lib_override_map = malloc(lib_override_map_size * sizeof(struct lib_override));
+	if(!map->overrides) {
+		size_t map_size = OVERRIDE_MAP_DEFAULT_SIZE;
+		map->overrides = malloc(map_size * sizeof(struct override));
+		map->len = 0;
+		map->size = map_size;
 	}
 
-	if(lib_override_map_len == lib_override_map_size) {
-		lib_override_map_size *= 2;
-		lib_override_map = realloc(lib_override_map, lib_override_map_size * sizeof(struct lib_override));
+	if(map->len == map->size) {
+		map->size *= 2;
+		map->overrides = realloc(map->overrides, map->size * sizeof(struct override));
 	}
 
-	lib_override_map[lib_override_map_len].from = from;
-	lib_override_map[lib_override_map_len].to = to;
-	lib_override_map_len += 1;
+	map->overrides[map->len].from = from;
+	map->overrides[map->len].to = to;
+	map->len += 1;
 }
 
-static void process_cfg_line(char *line, size_t len, char *path, int linenum)
+static void process_cfg_line(struct override_map *map, char *line, size_t len, char *path, int linenum)
 {
 	char *from;
 	char *to;
@@ -44,10 +43,10 @@ static void process_cfg_line(char *line, size_t len, char *path, int linenum)
 		exit(1);
 	}
 
-	lib_override_map_append(from, to);
+	override_map_append(map, from, to);
 }
 
-static void read_cfg_file(char *path)
+static void read_cfg_file(struct override_map *map, char *path)
 {
 	char *line = NULL;
 	size_t line_len;
@@ -60,7 +59,7 @@ static void read_cfg_file(char *path)
 	}
 
 	while(getline(&line, &line_len, cfg) > 0) {
-		process_cfg_line(line, line_len, path, linenum++);
+		process_cfg_line(map, line, line_len, path, linenum++);
 		free(line);
 		line = NULL;
 	}
@@ -68,7 +67,7 @@ static void read_cfg_file(char *path)
 	fclose(cfg);
 }
 
-void read_cfg_dir(char *cfg_dir_path)
+void read_cfg_dir(struct override_map *map, char *cfg_dir_path)
 {
 	struct dirent *entry;
 
@@ -82,7 +81,6 @@ void read_cfg_dir(char *cfg_dir_path)
 
 		char *full_path = malloc(strlen(cfg_dir_path) + 1 + strlen(entry->d_name) + 1); // +1 for /, +1 for NUL
 		sprintf(full_path, "%s/%s", cfg_dir_path, entry->d_name);
-		read_cfg_file(full_path);
+		read_cfg_file(map, full_path);
 	}
-
 }

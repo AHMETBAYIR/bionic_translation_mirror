@@ -117,7 +117,7 @@ typedef struct soinfo soinfo;
 #define FLAG_LINKER	0x00000010 // The linker itself
 #define FLAG_GNU_HASH   0x00000040 // uses gnu hash
 
-#define SOINFO_NAME_LEN 128
+#define SOINFO_NAME_LEN 512
 
 struct symbol_name {
 	const char *name;

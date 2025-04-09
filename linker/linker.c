@@ -1427,6 +1427,8 @@ apkenv_init_library(soinfo *si)
 	return si;
 }
 
+extern struct override_map lib_override_map;
+
 soinfo *apkenv_find_library(const char *name, const bool try_glibc, int glibc_flag, void **glibc_handle)
 {
 	soinfo *si;
@@ -1451,9 +1453,9 @@ soinfo *apkenv_find_library(const char *name, const bool try_glibc, int glibc_fl
 	else if(!strncmp(name, prefix64, prefix64_len))
 		name += prefix64_len;
 
-	for(int i = 0; i < lib_override_map_len; i++) {
-		if(!strcmp(lib_override_map[i].from, name)) {
-			name = lib_override_map[i].to;
+	for(int i = 0; i < lib_override_map.len; i++) {
+		if(!strcmp(lib_override_map.overrides[i].from, name)) {
+			name = lib_override_map.overrides[i].to;
 			break;
 		}
 	}

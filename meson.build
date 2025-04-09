@@ -1,5 +1,16 @@
 project('android_translation_layer', ['c', 'cpp'], default_options: ['b_lundef=false', 'b_asneeded=false'])
 
+config = declare_dependency(sources: [
+                            	'shared/config/config.c'
+                            ],
+                            compile_args: [
+                            	'-fPIC',
+                            	'-D_GNU_SOURCE',
+                            ],
+                            include_directories: [
+                            	'shared/config',
+                            ])
+
 wrapper = static_library('wrapper', [
                                     	'wrapper/wrapper.c'
                                     ],
@@ -10,7 +21,6 @@ wrapper = static_library('wrapper', [
                                     ])
 
 shared_library('dl_bio', [
-                         	'linker/config.c',
                          	'linker/dlfcn.c',
                          	'linker/linker.c',
                          	'linker/linker_environ.c',
@@ -22,15 +32,18 @@ shared_library('dl_bio', [
                          dependencies: [
                          	dependency('dl'),
                          	dependency('egl'),
+                         	config,
                          ],
                          link_with: [
                          	wrapper
                          ],
+
                          c_args: [
                          	'-fPIC',
                          	'-D_GNU_SOURCE',
                          	'-DLINKER_DEBUG=1',
                          	'-DVERBOSE_FUNCTIONS=1',
+                         	'-Wno-parentheses',
                          ],
                          link_args: [
                          	'-Wl,--no-as-needed',
@@ -69,7 +82,8 @@ shared_library('c_bio', [
                         soversion: 0, # we're shimming a stable ABI; this should never need to change
                         install: true,
                         dependencies: [
-                        	dependency('libbsd'), dependency('libunwind'),
+                        	dependency('libbsd'),
+                        	dependency('libunwind'),
                         ],
                         link_with: [
                         	wrapper,

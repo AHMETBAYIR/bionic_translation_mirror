@@ -281,6 +281,8 @@ soinfo apkenv_libdl_info = {
     .chain = apkenv_libdl_chains,
 };
 
+struct override_map lib_override_map;
+
 __attribute__((constructor)) void construct(void)
 {
 	const ElfW(Sym) symtab[sizeof(apkenv_libdl_symtab) / sizeof(apkenv_libdl_symtab[0])] = {
@@ -341,12 +343,12 @@ __attribute__((constructor)) void construct(void)
 		size_t len = strcspn(xdg_data_dirs, ":");
 		memcpy(cfg_path, xdg_data_dirs, len);
 		memcpy(cfg_path + len, "/bionic_translation/cfg.d", sizeof("/bionic_translation/cfg.d"));
-		read_cfg_dir(cfg_path);
+		read_cfg_dir(&lib_override_map, cfg_path);
 		xdg_data_dirs += len;
 		xdg_data_dirs += strspn(xdg_data_dirs, ":");
 	}
 	free(cfg_path);
-	read_cfg_dir("/etc/bionic_translation/cfg.d");
+	read_cfg_dir(&lib_override_map, "/etc/bionic_translation/cfg.d");
 
 
 	// since it seems to not be particularly trivial to figure out which
