@@ -5,43 +5,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #define OPEN_NEEDS_MODE(flags) ((flags & O_CREAT) || (flags & O_TMPFILE))
 
-/* FIXME - move most of this out of this file */
-static bool starts_with(const char *string, const char *substring)
-{
-	return !strncmp(string, substring, strlen(substring));
-}
-
+/* nop */
 static bool apply_path_overrides(char **path) {
-	bool free_path = 0;
-
-	/* TODO: read the overrides from a config file */
-	if(!strcmp(*path, "/system/etc/fonts.xml"))
-		*path = "/etc/fonts.xml";
-
-	if(starts_with(*path, "/fonts/")) {
-		char *old_path = strchr(*path + 1, '/'); // after /fonts
-		*path = malloc(sizeof("/usr/share/fonts/truetype") + strlen(old_path)); // sizeof includes the NUL byte
-		sprintf(*path, "/usr/share/fonts/truetype%s", old_path);
-		free_path = true;
-	}
-
-	if (starts_with(*path, "/system/") || starts_with(*path, "/data/")) {
-		printf("%s: !!! app trying to access >%s<, which will certainly fail\n", __func__, *path);
-		fflush(stdout);
-	}
-
-	return free_path;
+	return false;
 }
 
+typedef bool (apply_path_overrides_func_type)(char **);
+static apply_path_overrides_func_type *apply_path_overrides_func = apply_path_overrides;
+
+/* call this to set an overrides function */
+void libc_bio_set_apply_path_overrides_func(apply_path_overrides_func_type *func)
+{
+	apply_path_overrides_func = func;
+}
+
+/* open and fopen overrides */
 int bionic_open(char *path, int oflag, ...)
 {
 	int fd;
 	int mode;
 
-	bool free_path = apply_path_overrides(&path);
+	bool free_path = (*apply_path_overrides_func)(&path);
 
 	// Hide TracerPid from /proc/self/status for hideous apps that check for debugger.
 	// Note, since /proc/self/status doesn't get updated anymore, this may break some stuff.
@@ -94,7 +82,7 @@ int bionic_open(char *path, int oflag, ...)
 FILE *bionic_fopen(char *path, const char *restrict mode)
 {
 	FILE *file;
-	bool free_path = apply_path_overrides(&path);
+	bool free_path = (*apply_path_overrides_func)(&path);
 
 	file = fopen(path, mode);
 	if(free_path)

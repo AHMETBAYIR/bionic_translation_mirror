@@ -77,7 +77,7 @@ shared_library('c_bio', [
                         	'libc/libc-musl.c',
                            	'libc/libc-stdio.c',
                            	'libc/libc-sha1.c',
-                           	'libc/libc-antiantidebug.c',
+                           	'libc/libc-open-overrides.c',
                         ],
                         soversion: 0, # we're shimming a stable ABI; this should never need to change
                         install: true,
