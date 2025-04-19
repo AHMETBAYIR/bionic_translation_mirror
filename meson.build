@@ -41,6 +41,7 @@ shared_library('dl_bio', [
                          c_args: [
                          	'-fPIC',
                          	'-D_GNU_SOURCE',
+                         	'-D_LARGEFILE64_SOURCE',
                          	'-DLINKER_DEBUG=1',
                          	'-DVERBOSE_FUNCTIONS=1',
                          	'-Wno-parentheses',

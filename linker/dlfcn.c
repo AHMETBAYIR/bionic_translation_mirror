@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 #include <time.h>
 
 #include "config.h"
@@ -81,6 +82,24 @@ void *bionic_dlopen(const char *filename, int flag)
 	}
 	pthread_mutex_unlock(&apkenv_dl_lock);
 	return ret;
+}
+
+struct android_dlextinfo {
+	uint64_t flags;
+	void*   reserved_addr;
+	size_t  reserved_size;
+	int     relro_fd;
+	int     library_fd;
+	off64_t library_fd_offset;
+	struct android_namespace_t* library_namespace;
+};
+
+void *bionic_android_dlopen_ext(const char *filename, int flags, const struct android_dlextinfo *info)
+{
+	if (info) {
+		fprintf(stderr, "ERROR: android_dlopen_ext with android_dlextinfo not implemented\n");
+	}
+	return bionic_dlopen(filename, flags);
 }
 
 const char *bionic_dlerror(void)
