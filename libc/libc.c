@@ -72,12 +72,6 @@ int __system_property_get(const char *name, char *value)
 	return 0;
 }
 
-size_t strlcpy(char *dst, const char *src, size_t size)
-{
-	strcpy(dst, src);
-	return strlen(src);
-}
-
 pid_t gettid(void)
 {
 	return syscall(SYS_gettid);
