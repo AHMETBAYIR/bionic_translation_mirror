@@ -626,3 +626,8 @@ int bionic_pthread_cond_timedwait_monotonic(bionic_cond_t *cond, bionic_mutex_t 
 {
 	return bionic_pthread_cond_timedwait_monotonic_np(cond, mutex, abstime);
 }
+
+int bionic_pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(void))
+{
+	return pthread_atfork(prepare, parent, child);
+}
