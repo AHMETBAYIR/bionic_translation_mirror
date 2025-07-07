@@ -1,6 +1,7 @@
 // runtime implementations of _FORTIFY_SOURCE _chk functions (some with the checking removed)
 
 #include <sys/select.h>
+#include <sys/stat.h>
 
 #include <assert.h>
 #include <fcntl.h>
@@ -295,4 +296,11 @@ char *bionic___fgets_chk(char *dest, int supplied_size, FILE* stream, size_t des
 		abort();
 	}
 	return fgets(dest, supplied_size, stream);
+}
+
+mode_t bionic___umask_chk(mode_t mode) {
+	if (__builtin_expect((mode & 0777) != mode, 0)) {
+		fprintf(stderr, "umask called with invalid mask");
+	}
+	return umask(mode);
 }
