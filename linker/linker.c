@@ -71,6 +71,7 @@
 #include "linker.h"
 #include "linker_debug.h"
 #include "linker_environ.h"
+#include "linker_sleb128.h"
 #include "linker_format.h"
 
 #define ALLOW_SYMBOLS_FROM_MAIN 1
@@ -2336,6 +2337,95 @@ static bool apkenv_relocate_relr(soinfo *si) {
 	return true;
 }
 
+#if defined(USE_RELA)
+	typedef ElfW(Rela) rel_t;
+#else
+	typedef ElfW(Rel) rel_t;
+#endif
+
+static inline bool apkenv_apply_packed_relocs(soinfo *si, const uint8_t* packed_relocs, const size_t packed_relocs_size) {
+	const uint8_t *current = packed_relocs;
+	const uint8_t *end = packed_relocs + packed_relocs_size;
+	const size_t num_relocs = sleb128_decoder_pop_front(current++, end);
+
+	rel_t reloc = {
+		.r_offset = sleb128_decoder_pop_front(current++, end),
+	};
+
+	for (size_t idx = 0; idx < num_relocs; ) {
+		const size_t group_size = sleb128_decoder_pop_front(current++, end);
+		const size_t group_flags = sleb128_decoder_pop_front(current++, end);
+
+		size_t group_r_offset_delta = 0;
+
+		if (group_flags & RELOCATION_GROUPED_BY_OFFSET_DELTA_FLAG) {
+			group_r_offset_delta = sleb128_decoder_pop_front(current++, end);
+		}
+		if (group_flags & RELOCATION_GROUPED_BY_INFO_FLAG) {
+			//reloc.r_info = decoder.pop_front();
+		}
+
+#if defined(USE_RELA)
+		const size_t group_flags_reloc = group_flags & (RELOCATION_GROUP_HAS_ADDEND_FLAG |
+		RELOCATION_GROUPED_BY_ADDEND_FLAG);
+		if (group_flags_reloc == RELOCATION_GROUP_HAS_ADDEND_FLAG) {
+			// Each relocation has an addend. This is the default situation with lld's current encoder.
+		} else if (group_flags_reloc == (RELOCATION_GROUP_HAS_ADDEND_FLAG |
+		                                 RELOCATION_GROUPED_BY_ADDEND_FLAG)) {
+			//reloc.r_addend += decoder.pop_front();
+		} else {
+			//reloc.r_addend = 0;
+		}
+#else
+		if (unlikely(group_flags & RELOCATION_GROUP_HAS_ADDEND_FLAG)) {
+			// This platform does not support rela, and yet we have it encoded in android_rel section.
+			DL_ERR("unexpected r_addend in android.rel section");
+		}
+#endif
+
+		for (size_t i = 0; i < group_size; ++i) {
+			if (group_flags & RELOCATION_GROUPED_BY_OFFSET_DELTA_FLAG) {
+				reloc.r_offset += group_r_offset_delta;
+			} else {
+				reloc.r_offset += sleb128_decoder_pop_front(current++, end);
+			}
+			if ((group_flags & RELOCATION_GROUPED_BY_INFO_FLAG) == 0) {
+				reloc.r_info = sleb128_decoder_pop_front(current++, end);
+			}
+	#if defined(USE_RELA)
+			if (group_flags_reloc == RELOCATION_GROUP_HAS_ADDEND_FLAG) {
+				reloc.r_addend += sleb128_decoder_pop_front(current++, end);
+			}
+	#endif
+			// FIXME: clean up apkenv_reloc_library so we don't need to do this
+			// (this function expects an array, and will probably be extra slow like this)
+			return apkenv_reloc_library(si, &reloc, 1);
+		}
+
+		idx += group_size;
+	}
+
+	return true;
+}
+
+static bool apkenv_relocate_android_relocs(soinfo *si) {
+	// check signature
+	if (si->android_relocs_size_ > 3 &&
+	    si->android_relocs_[0] == 'A' &&
+	    si->android_relocs_[1] == 'P' &&
+	    si->android_relocs_[2] == 'S' &&
+	    si->android_relocs_[3] == '2') {
+		const uint8_t* packed_relocs = si->android_relocs_ + 4;
+		const size_t packed_relocs_size = si->android_relocs_size_ - 4;
+
+		return apkenv_apply_packed_relocs(si, packed_relocs, packed_relocs_size);
+	} else {
+		DL_ERR("bad android relocation header.");
+		return false;
+	}
+}
+
+
 /* Please read the "Initialization and Termination functions" functions.
  * of the linker design note in bionic/linker/README.TXT to understand
  * what the following code is doing.
@@ -2778,6 +2868,18 @@ static int apkenv_link_image(soinfo *si, /*unused...?*/ unsigned wr_offset)
 		case DT_RELSZ:
 			DL_ERR("unsupported DT_RELSZ in \"%s\"", si->name);
 			return false;
+		case DT_ANDROID_RELA:
+			si->android_relocs_ = (uint8_t *)(si->base + d->d_un.d_ptr);
+			break;
+		case DT_ANDROID_RELASZ:
+			si->android_relocs_size_ = d->d_un.d_val;
+			break;
+		case DT_ANDROID_REL:
+			DL_ERR("unsupported DT_ANDROID_REL in \"%s\"", si->name);
+			return false;
+		case DT_ANDROID_RELSZ:
+			DL_ERR("unsupported DT_ANDROID_RELSZ in \"%s\"", si->name);
+			return false;
 #else
 		case DT_REL:
 			si->rel = (ElfW(Rel) *)(si->base + d->d_un.d_ptr);
@@ -2787,6 +2889,19 @@ static int apkenv_link_image(soinfo *si, /*unused...?*/ unsigned wr_offset)
 			break;
 		case DT_RELA:
 			DL_ERR("unsupported DT_RELA in \"%s\"", si->name);
+			return false;
+
+		case DT_ANDROID_REL:
+			si->android_relocs_ = (uint8_t *)(si->base + d->d_un.d_ptr);
+			break;
+		case DT_ANDROID_RELSZ:
+			si->android_relocs_size_ = d->d_un.d_val;
+			break;
+		case DT_ANDROID_RELA:
+			DL_ERR("unsupported DT_ANDROID_RELA in \"%s\"", si->name);
+			return false;
+		case DT_ANDROID_RELASZ:
+			DL_ERR("unsupported DT_ANDROID_RELASZ in \"%s\"", si->name);
 			return false;
 #endif
 		case DT_RELR:
@@ -2903,6 +3018,12 @@ static int apkenv_link_image(soinfo *si, /*unused...?*/ unsigned wr_offset)
 			d->d_un.d_val = (intptr_t)lsi;
 			lsi->refcount++;
 		}
+	}
+
+	if (si->android_relocs_) {
+		DEBUG("[ %5d relocating %s android_relocs]\n", apkenv_pid, si->name);
+		if (!apkenv_relocate_android_relocs(si))
+			goto fail;
 	}
 
 #if defined(USE_RELA)
