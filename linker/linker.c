@@ -71,8 +71,9 @@
 #include "linker.h"
 #include "linker_debug.h"
 #include "linker_environ.h"
-#include "linker_sleb128.h"
 #include "linker_format.h"
+#include "linker_relocs.h"
+#include "linker_sleb128.h"
 
 #define ALLOW_SYMBOLS_FROM_MAIN 1
 #define SO_MAX 128
@@ -1758,25 +1759,39 @@ static ElfW(Addr) prepare_stub_func(const char* sym_name) {
 	return (intptr_t)make_copy_of_function(symbol_not_linked_stub, data);
 }
 
+#ifdef USE_RELA
+#define REL_TYPE ElfW(Rela)
+#else
+#define REL_TYPE ElfW(Rel)
+#endif
+
+
+static inline ElfW(Addr) get_addend(REL_TYPE *rel) {
 #if defined(USE_RELA)
-static int apkenv_reloc_library(soinfo *si, ElfW(Rela) * rela, size_t count)
+	return rel->r_addend;
+#else
+	return 0;
+#endif
+}
+
+static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 {
-	ElfW(Sym) * s;
+	ElfW(Sym) *s;
 	ElfW(Addr) base;
 
-	for (size_t idx = 0; idx < count; ++idx, ++rela) {
+	for (size_t idx = 0; idx < count; ++idx, ++rel) {
 
-		uint32_t type = ELF_R_TYPE(rela->r_info);
-		ElfW(Addr) sym = ELF_R_SYM(rela->r_info);
+		uint32_t type = ELF_R_TYPE(rel->r_info);
+		ElfW(Addr) sym = ELF_R_SYM(rel->r_info);
 
-		ElfW(Addr) reloc = (ElfW(Addr))(rela->r_offset + si->base);
+		ElfW(Addr) reloc = (ElfW(Addr))(rel->r_offset + si->base);
 		ElfW(Addr) sym_addr = 0;
 		const char *sym_name = NULL;
 		char wrap_sym_name[1024] = {'b', 'i', 'o', 'n', 'i', 'c', '_'};
 
 		DEBUG("Processing '%s' relocation at index %zd", si->name, idx);
 
-		if (type == 0) { // R_*_NONE
+		if (type == R_GENERIC_NONE) {
 			continue;
 		}
 
@@ -1787,13 +1802,13 @@ static int apkenv_reloc_library(soinfo *si, ElfW(Rela) * rela, size_t count)
 			sym_addr = 0;
 
 			if ((sym_addr = (intptr_t)dlsym(RTLD_DEFAULT, wrap_sym_name))) {
-				LINKER_DEBUG_PRINTF("%s hooked symbol %s to %016lx\n", si->name, wrap_sym_name, sym_addr);
+				LINKER_DEBUG_PRINTF("%s hooked symbol %s to %p\n", si->name, wrap_sym_name, (void *)sym_addr);
 			} else if ((s = apkenv__do_lookup(si, sym_name, &base))) {
 				// normal symbol
 			} else if ((sym_addr = (intptr_t)dlsym(RTLD_DEFAULT, sym_name))) {
 				if (strstr(sym_name, "pthread_"))
 					fprintf(stderr, "symbol may need to be wrapped: %s\n", sym_name);
-				LINKER_DEBUG_PRINTF("%s hooked symbol %s to %016lx\n", si->name, sym_name, sym_addr);
+				LINKER_DEBUG_PRINTF("%s hooked symbol %s to %p\n", si->name, sym_name, (void *)sym_addr);
 			} else if (!sym_addr && !strncmp(sym_name, "gl", 2)) {
 				LINKER_DEBUG_PRINTF("=======================================\n");
 				LINKER_DEBUG_PRINTF("%s symbol %s is an OpenGL extension?\n", si->name, sym_name);
@@ -1844,39 +1859,48 @@ static int apkenv_reloc_library(soinfo *si, ElfW(Rela) * rela, size_t count)
 					 type is base-relative.
 				 */
 				switch (type) {
+				case R_GENERIC_JUMP_SLOT:
+				case R_GENERIC_GLOB_DAT:
+				case R_GENERIC_RELATIVE:
+				//case R_GENERIC_IRELATIVE:
 #if defined(__aarch64__)
-				case R_AARCH64_JUMP_SLOT:
-				case R_AARCH64_GLOB_DAT:
 				case R_AARCH64_ABS64:
 				case R_AARCH64_ABS32:
 				case R_AARCH64_ABS16:
-				case R_AARCH64_RELATIVE:
+#elif defined(__x86_64__)
+				case R_X86_64_32:
+				case R_X86_64_64:
+#elif defined(__arm__)
+				case R_ARM_ABS32:
+#elif defined(__i386__)
+				case R_386_32:
 					/*
 					 * The sym_addr was initialized to be zero above, or the relocation
 					 * code below does not care about value of sym_addr.
 					 * No need to do anything.
 					 */
+#endif
 					break;
-#elif defined(__x86_64__)
-				case R_X86_64_JUMP_SLOT:
-				case R_X86_64_GLOB_DAT:
-				case R_X86_64_32:
-				case R_X86_64_64:
-				case R_X86_64_RELATIVE:
-					// No need to do anything.
-					break;
+#if defined(__x86_64__)
 				case R_X86_64_PC32:
 					sym_addr = reloc;
 					break;
 #endif
+
+#if defined(__i386__)
+				case R_386_PC32:
+					sym_addr = reloc;
+					break;
+#endif
+
 				default:
-					DL_ERR("unknown weak reloc type %d @ %p (%zu)", type, rela, idx);
+					DL_ERR("unknown weak reloc type %d @ %p (%zu)", type, rel, idx);
 					return -1;
 				}
 			} else {
 				/* We got a definition.  */
 				sym_addr = (ElfW(Addr))(s->st_value + base);
-				LINKER_DEBUG_PRINTF("%s symbol (from %s) %s to %016lx\n", si->name, apkenv_last_library_used, sym_name, sym_addr);
+				LINKER_DEBUG_PRINTF("%s symbol (from %s) %s to %p\n", si->name, apkenv_last_library_used, sym_name, (void *)sym_addr);
 				if (ELF_ST_TYPE(s->st_info) == STT_FUNC) {
 					sym_addr = (ElfW(Addr))wrapper_create(sym_name, (void *)sym_addr);
 				}
@@ -1886,109 +1910,110 @@ static int apkenv_reloc_library(soinfo *si, ElfW(Rela) * rela, size_t count)
 			s = NULL;
 		}
 		switch (type) {
+		case R_GENERIC_JUMP_SLOT:
+			COUNT_RELOC(RELOC_ABSOLUTE);
+			MARK(rel->r_offset);
+			TRACE_TYPE(RELO, "RELO JMP_SLOT %p <- %p %s\n", (void *)reloc,
+				   (void *)(sym_addr + get_addend(rel)), sym_name);
+			*((ElfW(Addr) *)reloc) = sym_addr + get_addend(rel);
+			break;
+		case R_GENERIC_GLOB_DAT:
+			COUNT_RELOC(RELOC_ABSOLUTE);
+			MARK(rel->r_offset);
+
+			TRACE_TYPE(RELO, "RELO GLOB_DAT %p <- %p %s\n", (void *)reloc,
+				   (void *)(sym_addr + get_addend(rel)), sym_name);
+			*((ElfW(Addr) *)reloc) = sym_addr + get_addend(rel);
+			break;
+		case R_GENERIC_RELATIVE:
+			COUNT_RELOC(RELOC_RELATIVE);
+			MARK(rel->r_offset);
+			if (sym) {
+				DL_ERR("odd RELATIVE form...");
+				return -1;
+			}
+			TRACE_TYPE(RELO, "RELO RELATIVE %p <- +%p\n", (void *)reloc,
+				   (void *)si->base);
+			*((ElfW(Addr) *)reloc) = si->base + get_addend(rel);
+			break;
 #if defined(__aarch64__)
-		case R_AARCH64_JUMP_SLOT:
-			COUNT_RELOC(RELOC_ABSOLUTE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO JMP_SLOT %16llx <- %16llx %s\n",
-				   reloc, (sym_addr + rela->r_addend), sym_name);
-			*((ElfW(Addr) *)reloc) = (sym_addr + rela->r_addend);
-			break;
-		case R_AARCH64_GLOB_DAT:
-			COUNT_RELOC(RELOC_ABSOLUTE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO GLOB_DAT %16llx <- %16llx %s\n",
-				   reloc, (sym_addr + rela->r_addend), sym_name);
-			*((ElfW(Addr) *)reloc) = (sym_addr + rela->r_addend);
-			break;
 		case R_AARCH64_ABS64:
 			COUNT_RELOC(RELOC_ABSOLUTE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO ABS64 %16llx <- %16llx %s\n",
-				   reloc, (sym_addr + rela->r_addend), sym_name);
-			*((ElfW(Addr) *)reloc) += (sym_addr + rela->r_addend);
+			MARK(rel->r_offset);
+			TRACE_TYPE(RELO, "RELO ABS64 %p <- %p %s\n",
+				   (void *)reloc, (void *)(sym_addr + get_addend(rel)), sym_name);
+			*((ElfW(Addr) *)reloc) += (sym_addr + get_addend(rel));
 			break;
 		case R_AARCH64_ABS32:
 			COUNT_RELOC(RELOC_ABSOLUTE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO ABS32 %16llx <- %16llx %s\n",
-				   reloc, (sym_addr + rela->r_addend), sym_name);
-			if (((ElfW(Addr))(INT32_MIN) <= (*((ElfW(Addr) *)reloc) + (sym_addr + rela->r_addend))) &&
-			    ((*((ElfW(Addr) *)reloc) + (sym_addr + rela->r_addend)) <= (ElfW(Addr))(UINT32_MAX))) {
-				*((ElfW(Addr) *)reloc) += (sym_addr + rela->r_addend);
+			MARK(rel->r_offset);
+			TRACE_TYPE(RELO, "RELO ABS32 %p <- %p %s\n",
+				   (void *)reloc, (void *)(sym_addr + rel->r_addend), sym_name);
+			if (((ElfW(Addr))(INT32_MIN) <= (*((ElfW(Addr) *)reloc) + (sym_addr + get_addend(rel)))) &&
+			    ((*((ElfW(Addr) *)reloc) + (sym_addr + get_addend(rel))) <= (ElfW(Addr))(UINT32_MAX))) {
+				*((ElfW(Addr) *)reloc) += (sym_addr + get_addend(rel));
 			} else {
-				DL_ERR("0x%016llx out of range 0x%016llx to 0x%016llx",
-				       (*((ElfW(Addr) *)reloc) + (sym_addr + rela->r_addend)),
-				       (ElfW(Addr))(INT32_MIN),
-				       (ElfW(Addr))(UINT32_MAX));
+				DL_ERR("0x%p out of range 0x%p to 0x%p",
+				       (void *)(*((ElfW(Addr) *)reloc) + (sym_addr + get_addend(rel))),
+				       (void *)(ElfW(Addr))(INT32_MIN),
+				       (void *)(ElfW(Addr))(UINT32_MAX));
 				return -1;
 			}
 			break;
 		case R_AARCH64_ABS16:
 			COUNT_RELOC(RELOC_ABSOLUTE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO ABS16 %16llx <- %16llx %s\n",
-				   reloc, (sym_addr + rela->r_addend), sym_name);
-			if (((ElfW(Addr))(INT16_MIN) <= (*((ElfW(Addr) *)reloc) + (sym_addr + rela->r_addend))) &&
-			    ((*((ElfW(Addr) *)reloc) + (sym_addr + rela->r_addend)) <= (ElfW(Addr))(UINT16_MAX))) {
-				*((ElfW(Addr) *)reloc) += (sym_addr + rela->r_addend);
+			MARK(rel->r_offset);
+			TRACE_TYPE(RELO, "RELO ABS16 %p <- %p %s\n",
+				   (void *)reloc, (void *)(sym_addr + get_addend(rel)), sym_name);
+			if (((ElfW(Addr))(INT16_MIN) <= (*((ElfW(Addr) *)reloc) + (sym_addr + get_addend(rel)))) &&
+			    ((*((ElfW(Addr) *)reloc) + (sym_addr + get_addend(rel))) <= (ElfW(Addr))(UINT16_MAX))) {
+				*((ElfW(Addr) *)reloc) += (sym_addr + get_addend(rel));
 			} else {
-				DL_ERR("0x%016llx out of range 0x%016llx to 0x%016llx",
-				       (*((ElfW(Addr) *)reloc) + (sym_addr + rela->r_addend)),
-				       (ElfW(Addr))(INT16_MIN),
-				       (ElfW(Addr))(UINT16_MAX));
+				DL_ERR("0x%p out of range 0x%p to 0x%p",
+				       (void *)(*((ElfW(Addr) *)reloc) + (sym_addr + get_addend(rel))),
+				       (void *)(ElfW(Addr))(INT16_MIN),
+				       (void *)(ElfW(Addr))(UINT16_MAX));
 				return -1;
 			}
 			break;
 		case R_AARCH64_PREL64:
 			COUNT_RELOC(RELOC_RELATIVE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO REL64 %16llx <- %16llx - %16llx %s\n",
-				   reloc, (sym_addr + rela->r_addend), rela->r_offset, sym_name);
-			*((ElfW(Addr) *)reloc) += (sym_addr + rela->r_addend) - rela->r_offset;
+			MARK(rel->r_offset);
+			TRACE_TYPE(RELO, "RELO REL64 %p <- %p - %p %s\n",
+				   reloc, (sym_addr + get_addend(rel)), rel->r_offset, sym_name);
+			*((ElfW(Addr) *)reloc) += (sym_addr + get_addend(rel)) - rel->r_offset;
 			break;
 		case R_AARCH64_PREL32:
 			COUNT_RELOC(RELOC_RELATIVE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO REL32 %16llx <- %16llx - %16llx %s\n",
-				   reloc, (sym_addr + rela->r_addend), rela->r_offset, sym_name);
-			if (((ElfW(Addr))(INT32_MIN) <= (*((ElfW(Addr) *)reloc) + ((sym_addr + rela->r_addend) - rela->r_offset))) &&
-			    ((*((ElfW(Addr) *)reloc) + ((sym_addr + rela->r_addend) - rela->r_offset)) <= (ElfW(Addr))(UINT32_MAX))) {
-				*((ElfW(Addr) *)reloc) += ((sym_addr + rela->r_addend) - rela->r_offset);
+			MARK(rel->r_offset);
+			TRACE_TYPE(RELO, "RELO REL32 %p <- %p - %p %s\n",
+				   reloc, (sym_addr + get_addend(rel)), rel->r_offset, sym_name);
+			if (((ElfW(Addr))(INT32_MIN) <= (*((ElfW(Addr) *)reloc) + ((sym_addr + get_addend(rel)) - rel->r_offset))) &&
+			    ((*((ElfW(Addr) *)reloc) + ((sym_addr + get_addend(rel)) - rel->r_offset)) <= (ElfW(Addr))(UINT32_MAX))) {
+				*((ElfW(Addr) *)reloc) += ((sym_addr + get_addend(rel)) - rel->r_offset);
 			} else {
-				DL_ERR("0x%016llx out of range 0x%016llx to 0x%016llx",
-				       (*((ElfW(Addr) *)reloc) + ((sym_addr + rela->r_addend) - rela->r_offset)),
-				       (ElfW(Addr))(INT32_MIN),
-				       (ElfW(Addr))(UINT32_MAX));
+				DL_ERR("0x%016llx out of range 0x%p to 0x%p",
+				       (void *)(*((ElfW(Addr) *)reloc) + ((sym_addr + get_addend(rel)) - rel->r_offset)),
+				       (void *)(ElfW(Addr))(INT32_MIN),
+				       (void *)(ElfW(Addr))(UINT32_MAX));
 				return -1;
 			}
 			break;
 		case R_AARCH64_PREL16:
 			COUNT_RELOC(RELOC_RELATIVE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO REL16 %16llx <- %16llx - %16llx %s\n",
-				   reloc, (sym_addr + rela->r_addend), rela->r_offset, sym_name);
-			if (((ElfW(Addr))(INT16_MIN) <= (*((ElfW(Addr) *)reloc) + ((sym_addr + rela->r_addend) - rela->r_offset))) &&
-			    ((*((ElfW(Addr) *)reloc) + ((sym_addr + rela->r_addend) - rela->r_offset)) <= (ElfW(Addr))(UINT16_MAX))) {
-				*((ElfW(Addr) *)reloc) += ((sym_addr + rela->r_addend) - rela->r_offset);
+			MARK(rel->r_offset);
+			TRACE_TYPE(RELO, "RELO REL16 %p <- %p - %p %s\n",
+				   (void *)reloc, (void *)(sym_addr + get_addend(rel)), (void *)rel->r_offset, sym_name);
+			if (((ElfW(Addr))(INT16_MIN) <= (*((ElfW(Addr) *)reloc) + ((sym_addr + get_addend(rel)) - rel->r_offset))) &&
+			    ((*((ElfW(Addr) *)reloc) + ((sym_addr + get_addend(rel)) - rel->r_offset)) <= (ElfW(Addr))(UINT16_MAX))) {
+				*((ElfW(Addr) *)reloc) += ((sym_addr + get_addend(rel)) - rel->r_offset);
 			} else {
-				DL_ERR("0x%016llx out of range 0x%016llx to 0x%016llx",
-				       (*((ElfW(Addr) *)reloc) + ((sym_addr + rela->r_addend) - rela->r_offset)),
-				       (ElfW(Addr))(INT16_MIN),
-				       (ElfW(Addr))(UINT16_MAX));
+				DL_ERR("0x%p out of range 0x%p to 0xp",
+				       (void *)(*((ElfW(Addr) *)reloc) + ((sym_addr + get_addend(rel)) - rel->r_offset)),
+				       (void *)(ElfW(Addr))(INT16_MIN),
+				       (void *)(ElfW(Addr))(UINT16_MAX));
 				return -1;
 			}
-			break;
-		case R_AARCH64_RELATIVE:
-			COUNT_RELOC(RELOC_RELATIVE);
-			MARK(rela->r_offset);
-			if (sym) {
-				DL_ERR("odd RELATIVE form...");
-				return -1;
-			}
-			TRACE_TYPE(RELO, "RELO RELATIVE %16llx <- %16llx\n",
-				   reloc, (si->base + rela->r_addend));
-			*((ElfW(Addr) *)reloc) = (si->base + rela->r_addend);
 			break;
 		case R_AARCH64_COPY:
 			/*
@@ -2003,265 +2028,69 @@ static int apkenv_reloc_library(soinfo *si, ElfW(Rela) * rela, size_t count)
 			DL_ERR("%s R_AARCH64_COPY relocations are not supported", si->name);
 			return -1;
 		case R_AARCH64_TLS_TPREL64:
-			TRACE_TYPE(RELO, "RELO TLS_TPREL64 *** %16llx <- %16llx - %16llx\n",
-				   reloc, (sym_addr + rela->r_addend), rela->r_offset);
+			TRACE_TYPE(RELO, "RELO TLS_TPREL64 *** %p <- %p - %p\n",
+				   (void *)reloc, (void *)(sym_addr + get_addend(rel)), (void *)rel->r_offset);
 			break;
 		case R_AARCH64_TLS_DTPREL32:
-			TRACE_TYPE(RELO, "RELO TLS_DTPREL32 *** %16llx <- %16llx - %16llx\n",
-				   reloc, (sym_addr + rela->r_addend), rela->r_offset);
+			TRACE_TYPE(RELO, "RELO TLS_DTPREL32 *** %p <- %p - %p\n",
+				   (void *)reloc, (void *)(sym_addr + get_addend(rel)), (void *)rel->r_offset);
 			break;
 #elif defined(__x86_64__)
-		case R_X86_64_JUMP_SLOT:
-			COUNT_RELOC(RELOC_ABSOLUTE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO JMP_SLOT %08zx <- %08zx %s\n", (size_t)(reloc),
-				   (size_t)(sym_addr + rela->r_addend), sym_name);
-			*((ElfW(Addr) *)reloc) = sym_addr + rela->r_addend;
-			break;
-		case R_X86_64_GLOB_DAT:
-			COUNT_RELOC(RELOC_ABSOLUTE);
-			MARK(rela->r_offset);
-
-			TRACE_TYPE(RELO, "RELO GLOB_DAT %08zx <- %08zx %s\n", (size_t)(reloc),
-
-				   (size_t)(sym_addr + rela->r_addend), sym_name);
-			*((ElfW(Addr) *)reloc) = sym_addr + rela->r_addend;
-			break;
-		case R_X86_64_RELATIVE:
-			COUNT_RELOC(RELOC_RELATIVE);
-			MARK(rela->r_offset);
-			if (sym) {
-				DL_ERR("odd RELATIVE form...");
-				return -1;
-			}
-			TRACE_TYPE(RELO, "RELO RELATIVE %08zx <- +%08zx\n", (size_t)(reloc),
-				   (size_t)(si->base));
-			*((ElfW(Addr) *)reloc) = si->base + rela->r_addend;
-			break;
 		case R_X86_64_32:
 			COUNT_RELOC(RELOC_RELATIVE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO R_X86_64_32 %08zx <- +%08zx %s\n", (size_t)(reloc),
-				   (size_t)(sym_addr), sym_name);
-			*((ElfW(Addr) *)reloc) = sym_addr + rela->r_addend;
+			MARK(rel->r_offset);
+			TRACE_TYPE(RELO, "RELO R_X86_64_32 %016zx <- +%p %s\n", (void *)(reloc),
+				   (void *)(sym_addr), sym_name);
+			*((ElfW(Addr) *)reloc) = sym_addr + get_addend(rel);
 			break;
 		case R_X86_64_64:
 			COUNT_RELOC(RELOC_RELATIVE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO R_X86_64_64 %08zx <- +%08zx %s\n", (size_t)(reloc),
-				   (size_t)(sym_addr), sym_name);
-			*((ElfW(Addr) *)reloc) = sym_addr + rela->r_addend;
+			MARK(rel->r_offset);
+			TRACE_TYPE(RELO, "RELO R_X86_64_64 %p <- +%p %s\n", (void *)(reloc),
+				   (void *)(sym_addr), sym_name);
+			*((ElfW(Addr) *)reloc) = sym_addr + get_addend(rel);
 			break;
 		case R_X86_64_PC32:
 			COUNT_RELOC(RELOC_RELATIVE);
-			MARK(rela->r_offset);
-			TRACE_TYPE(RELO, "RELO R_X86_64_PC32 %08zx <- +%08zx (%08zx - %08zx) %s\n",
-				   (size_t)(reloc), (size_t)(sym_addr - reloc),
-				   (size_t)(sym_addr), (size_t)(reloc), sym_name);
-			*((ElfW(Addr) *)reloc) = sym_addr + rela->r_addend - reloc;
-			break;
-#endif
-		default:
-			DL_ERR("unknown reloc type %d @ %p (%zu)", type, rela, idx);
-			return -1;
-		}
-	}
-	return 0;
-}
-#else // REL, not RELA.
-static int apkenv_reloc_library(soinfo *si, ElfW(Rel) * rel, size_t count)
-{
-	ElfW(Sym) *symtab = si->symtab;
-	const char *strtab = si->strtab;
-
-	ElfW(Sym) * s;
-	ElfW(Addr) base;
-	ElfW(Rel) *start = rel;
-
-	for (size_t idx = 0; idx < count; ++idx, ++rel) {
-
-		uint32_t type = ELF_R_TYPE(rel->r_info);
-		ElfW(Addr) sym = ELF_R_SYM(rel->r_info);
-
-		ElfW(Addr) reloc = (ElfW(Addr))(rel->r_offset + si->base);
-		ElfW(Addr) sym_addr = 0;
-		char *sym_name = NULL;
-		char wrap_sym_name[1024] = {'b', 'i', 'o', 'n', 'i', 'c', '_'};
-
-		DEBUG("%5d Processing '%s' relocation at index %d\n", apkenv_pid, si->name, idx);
-
-		// TODO: should we have this?
-		//		if (type == 0) { // R_*_NONE
-		//			continue;
-		//		}
-		if (sym != 0) {
-			sym_name = (const char *)(si->strtab + si->symtab[sym].st_name);
-
-			memcpy(wrap_sym_name + 7, sym_name, MIN(sizeof(wrap_sym_name) - 7, strlen(sym_name)));
-			sym_addr = 0;
-
-			if ((sym_addr = (intptr_t)dlsym(RTLD_DEFAULT, wrap_sym_name))) {
-				LINKER_DEBUG_PRINTF("%s hooked symbol %s to %x\n", si->name, wrap_sym_name, sym_addr);
-			} else if ((s = apkenv__do_lookup(si, sym_name, &base))) {
-				// normal symbol
-			} else if ((sym_addr = (intptr_t)dlsym(RTLD_DEFAULT, sym_name))) {
-				if (strstr(sym_name, "pthread_"))
-					fprintf(stderr, "symbol may need to be wrapped: %s\n", sym_name);
-				LINKER_DEBUG_PRINTF("%s hooked symbol %s to %x\n", si->name, sym_name, sym_addr);
-			} else {
-				// symbol not found
-				if(getenv("LINKER_DIE_AT_RUNTIME")) {
-					// if this special env is set, and the symbol is a function, link in a stub which only fails when it's actually called
-					if(ELF_ST_TYPE(si->symtab[sym].st_info) == STT_FUNC) {
-						sym_addr = prepare_stub_func(sym_name);
-						fprintf(stderr, "%s hooked symbol %s to symbol_not_linked_stub (LINKER_DIE_AT_RUNTIME)\n", si->name, sym_name);
-					}
-				}
-			}
-
-			if (sym_addr != 0) {
-#ifdef __GLIBC__
-				Dl_info info;
-				ElfW(Sym) * extra;
-				if (dladdr1((void *)sym_addr, &info, (void **)&extra, RTLD_DL_SYMENT) && (!extra || ELF_ST_TYPE(extra->st_info) == STT_FUNC))
-					sym_addr = (ElfW(Addr))wrapper_create(sym_name, (void *)sym_addr);
-#endif
-			} else if (s == NULL) {
-				/* We only allow an undefined symbol if this is a weak
-				   reference..   */
-				s = &si->symtab[sym];
-				if (ELF_ST_BIND(s->st_info) != STB_WEAK) {
-					DL_ERR("%5d cannot locate '%s'...\n", apkenv_pid, sym_name);
-					return -1;
-				}
-				/* IHI0044C AAELF 4.5.1.1:
-					 Libraries are not searched to resolve weak references.
-					 It is not an error for a weak reference to remain unsatisfied.
-					 During linking, the value of an undefined weak reference is:
-					 - Zero if the relocation type is absolute
-					 - The address of the place if the relocation is pc-relative
-					 - The address of nominal base address if the relocation
-					 type is base-relative.
-				 */
-				switch (type) {
-#if defined(__arm__)
-				case R_ARM_JUMP_SLOT:
-				case R_ARM_GLOB_DAT:
-				case R_ARM_ABS32:
-				case R_ARM_RELATIVE: /* Don't care. */
-				case R_ARM_NONE:     /* Don't care. */
-					break;
-#elif defined(__i386__)
-				case R_386_JMP_SLOT:
-				case R_386_GLOB_DAT:
-				case R_386_32:
-				case R_386_RELATIVE: /* Dont' care. */
-					/* sym_addr was initialized to be zero above or relocation
-					   code below does not care about value of sym_addr.
-					   No need to do anything.  */
-					break;
-				case R_386_PC32:
-					sym_addr = reloc;
-					break;
-#endif
-#if defined(__arm__)
-				case R_ARM_COPY:
-					/* Fall through.  Can't really copy if weak symbol is
-					   not found in run-time.  */
-#endif
-				default:
-					DL_ERR("%5d unknown weak reloc type %d @ %p (%d)\n",
-					       apkenv_pid, type, rel, (int)(rel - start));
-					return -1;
-				}
-			} else {
-				/* We got a definition.  */
-				sym_addr = (ElfW(Addr))(s->st_value + base);
-				LINKER_DEBUG_PRINTF("%s symbol (from %s) %s to %x\n", si->name, apkenv_last_library_used, sym_name, sym_addr);
-				if (ELF_ST_TYPE(s->st_info) == STT_FUNC) {
-					sym_addr = (ElfW(Addr))wrapper_create(sym_name, (void *)sym_addr);
-				}
-			}
-			COUNT_RELOC(RELOC_SYMBOL);
-		} else {
-			s = NULL;
-		}
-
-		/* TODO: This is ugly. Split up the relocations by arch into
-		 * different files.
-		 */
-		switch (type) {
-#if defined(__arm__)
-		case R_ARM_JUMP_SLOT:
-			COUNT_RELOC(RELOC_ABSOLUTE);
 			MARK(rel->r_offset);
-			TRACE_TYPE(RELO, "%5d RELO JMP_SLOT %016lx <- %016lx %s\n", apkenv_pid,
-				   reloc, sym_addr, sym_name);
-			*((ElfW(Addr) *)reloc) = sym_addr;
+			TRACE_TYPE(RELO, "RELO R_X86_64_PC32 %p <- +%p (%p - %p) %s\n",
+				   (void *)(reloc), (void *)(sym_addr - reloc),
+				   (void *)(sym_addr), (void *)(reloc), sym_name);
+			*((ElfW(Addr) *)reloc) = sym_addr + get_addend(rel) - reloc;
 			break;
-		case R_ARM_GLOB_DAT:
-			COUNT_RELOC(RELOC_ABSOLUTE);
-			MARK(rel->r_offset);
-
-			TRACE_TYPE(RELO, "%5d RELO GLOB_DAT %016lx <- %016lx %s\n", apkenv_pid,
-				   reloc, sym_addr, sym_name);
-
-			*((ElfW(Addr) *)reloc) = sym_addr;
-			break;
+#endif
+#if defined(__arm__)
 		case R_ARM_ABS32:
 			COUNT_RELOC(RELOC_ABSOLUTE);
 			MARK(rel->r_offset);
-			TRACE_TYPE(RELO, "%5d RELO ABS %016lx <- %016lx %s\n", apkenv_pid,
-				   reloc, sym_addr, sym_name);
+			TRACE_TYPE(RELO, "%5d RELO ABS %p <- %p %s\n", apkenv_pid,
+				   (void *)reloc, (void *)sym_addr, sym_name);
 			*((ElfW(Addr) *)reloc) += sym_addr;
 			break;
 		case R_ARM_REL32:
 			COUNT_RELOC(RELOC_RELATIVE);
 			MARK(rel->r_offset);
-			TRACE_TYPE(RELO, "%5d RELO REL32 %016lx <- %016lx - %016lx %s\n", apkenv_pid,
-				   reloc, sym_addr, rel->r_offset, sym_name);
+			TRACE_TYPE(RELO, "%5d RELO REL32 %p <- %p - %p %s\n", apkenv_pid,
+				   (void *)reloc, (void *)sym_addr, (void *)rel->r_offset, sym_name);
 			*((ElfW(Addr) *)reloc) += sym_addr - rel->r_offset;
 			break;
-#elif defined(__i386__)
-		case R_386_JMP_SLOT:
-			COUNT_RELOC(RELOC_ABSOLUTE);
+		case R_ARM_COPY:
+			COUNT_RELOC(RELOC_COPY);
 			MARK(rel->r_offset);
-			TRACE_TYPE(RELO, "%5d RELO JMP_SLOT %016lx <- %016lx %s\n", apkenv_pid,
-				   reloc, sym_addr, sym_name);
-			*((ElfW(Addr) *)reloc) = sym_addr;
+			TRACE_TYPE(RELO, "%5d RELO %p <- %d @ %p %s\n", apkenv_pid,
+				   (void *)reloc, s->st_size, (void *)sym_addr, sym_name);
+			memcpy((void *)reloc, (void *)sym_addr, s->st_size);
 			break;
-		case R_386_GLOB_DAT:
-			COUNT_RELOC(RELOC_ABSOLUTE);
-			MARK(rel->r_offset);
-			TRACE_TYPE(RELO, "%5d RELO GLOB_DAT %016lx <- %016lx %s\n", apkenv_pid,
-				   reloc, sym_addr, sym_name);
-			*((ElfW(Addr) *)reloc) = sym_addr;
+		case R_ARM_NONE:
 			break;
 #endif
-
-#if defined(__arm__)
-		case R_ARM_RELATIVE:
-#elif defined(__i386__)
-		case R_386_RELATIVE:
-#endif
-			COUNT_RELOC(RELOC_RELATIVE);
-			MARK(rel->r_offset);
-			if (sym) {
-				DL_ERR("%5d odd RELATIVE form...", apkenv_pid);
-				return -1;
-			}
-			TRACE_TYPE(RELO, "%5d RELO RELATIVE %016lx <- +%016lx\n", apkenv_pid,
-				   reloc, si->base);
-			*((ElfW(Addr) *)reloc) += si->base;
-			break;
-
 #if defined(__i386__)
 		case R_386_32:
 			COUNT_RELOC(RELOC_RELATIVE);
 			MARK(rel->r_offset);
 
-			TRACE_TYPE(RELO, "%5d RELO R_386_32 %016lx <- +%016lx %s\n", apkenv_pid,
-				   reloc, sym_addr, sym_name);
+			TRACE_TYPE(RELO, "%5d RELO R_386_32 %p <- +%p %s\n", apkenv_pid,
+				   (void *)reloc, (void *)sym_addr, sym_name);
 			*((ElfW(Addr) *)reloc) += (uint32_t)sym_addr;
 			break;
 
@@ -2269,34 +2098,19 @@ static int apkenv_reloc_library(soinfo *si, ElfW(Rel) * rel, size_t count)
 			COUNT_RELOC(RELOC_RELATIVE);
 			MARK(rel->r_offset);
 			TRACE_TYPE(RELO, "%5d RELO R_386_PC32 %016lx <- "
-					 "+%016lx (%016lx - %016lx) %s\n",
-				   apkenv_pid, reloc,
-				   (sym_addr - reloc), sym_addr, reloc, sym_name);
+					 "+%p (%p - %p) %s\n",
+				   apkenv_pid, (void *)reloc,
+				   (void *)(sym_addr - reloc), (void *)sym_addr, (void *)reloc, sym_name);
 			*((ElfW(Addr) *)reloc) += (uint32_t)(sym_addr - reloc);
 			break;
 #endif
-
-#ifdef __arm__
-		case R_ARM_COPY:
-			COUNT_RELOC(RELOC_COPY);
-			MARK(rel->r_offset);
-			TRACE_TYPE(RELO, "%5d RELO %016lx <- %d @ %016lx %s\n", apkenv_pid,
-				   reloc, s->st_size, sym_addr, sym_name);
-			memcpy((void *)reloc, (void *)sym_addr, s->st_size);
-			break;
-		case R_ARM_NONE:
-			break;
-#endif
-
 		default:
-			DL_ERR("%5d unknown reloc type %d @ %p (%d)",
-			       apkenv_pid, type, rel, (int)(rel - start));
+			DL_ERR("unknown reloc type %d @ %p (%zu)", type, rel, idx);
 			return -1;
 		}
 	}
 	return 0;
 }
-#endif
 
 void apkenv_apply_relr_reloc(soinfo *si, ElfW(Addr) offset) {
 	ElfW(Addr) address = offset + si->base;
