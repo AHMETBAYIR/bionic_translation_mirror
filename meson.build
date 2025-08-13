@@ -24,6 +24,7 @@ shared_library('dl_bio', [
                          	'linker/dlfcn.c',
                          	'linker/linker.c',
                          	'linker/linker_environ.c',
+                         	'linker/linker_tls.c',
                          	'linker/rt.c',
                          	'linker/strlcpy.c'
                          ],

@@ -71,6 +71,7 @@
 #include "linker.h"
 #include "linker_debug.h"
 #include "linker_environ.h"
+#include "linker_tls.h"
 #include "linker_format.h"
 #include "linker_relocs.h"
 #include "linker_sleb128.h"
@@ -1863,6 +1864,7 @@ static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 				case R_GENERIC_GLOB_DAT:
 				case R_GENERIC_RELATIVE:
 				//case R_GENERIC_IRELATIVE:
+				/* TODO: handle non-0 symbol for TLS relocs */
 #if defined(__aarch64__)
 				case R_AARCH64_ABS64:
 				case R_AARCH64_ABS32:
@@ -1935,6 +1937,9 @@ static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 			TRACE_TYPE(RELO, "RELO RELATIVE %p <- +%p\n", (void *)reloc,
 				   (void *)si->base);
 			*((ElfW(Addr) *)reloc) = si->base + get_addend(rel);
+			break;
+		case R_GENERIC_TLS_DTPMOD:
+			*((ElfW(Addr) *)reloc) = si->tls_slot_id;
 			break;
 #if defined(__aarch64__)
 		case R_AARCH64_ABS64:
@@ -2502,90 +2507,25 @@ static int apkenv_link_image(soinfo *si, /*unused...?*/ unsigned wr_offset)
 	ElfW(Phdr) *phdr = si->phdr;
 	int phnum = si->phnum;
 
+	void *tls_init = NULL;
+	size_t tls_init_size = 0;
+	size_t tls_size = 0;
+	size_t tls_align = 0;
+
 	INFO("[ %5d linking %s ]\n", apkenv_pid, si->name);
 	DEBUG("%5d si->base = 0x%016lx si->flags = 0x%08x\n", apkenv_pid,
 	      si->base, si->flags);
 
-	if (si->flags & (FLAG_EXE | FLAG_LINKER)) {
-		/* Locate the needed program segments (DYNAMIC/ARM_EXIDX) for
-		 * linkage info if this is the executable or the linker itself.
-		 * If this was a dynamic lib, that would have been done at load time.
-		 *
-		 * TODO: It's unfortunate that small pieces of this are
-		 * repeated from the apkenv_load_library routine. Refactor this just
-		 * slightly to reuse these bits.
-		 */
-		si->size = 0;
-		for (; phnum > 0; --phnum, ++phdr) {
-#if defined(__arm__)
-			if (phdr->p_type == PT_ARM_EXIDX) {
-				/* exidx entries (used for stack unwinding) are 8 bytes each.
-				 */
-				si->ARM_exidx = (ElfW(Addr) *)phdr->p_vaddr;
-				si->ARM_exidx_count = phdr->p_memsz / 8;
-			}
-#endif
-			if (phdr->p_type == PT_LOAD) {
-				/* For the executable, we use the si->size field only in
-				   dl_unwind_find_exidx(), so the meaning of si->size
-				   is not the size of the executable; it is the distance
-				   between the load location of the executable and the last
-				   address of the loadable part of the executable.
-				   We use the range [si->base, si->base + si->size) to
-				   determine whether a PC value falls within the executable
-				   section. Of course, if a value is between si->base and
-				   (si->base + phdr->p_vaddr), it's not in the executable
-				   section, but a) we shouldn't be asking for such a value
-				   anyway, and b) if we have to provide an EXIDX for such a
-				   value, then the executable's EXIDX is probably the better
-				   choice.
-				*/
-				DEBUG_DUMP_PHDR(phdr, "PT_LOAD", apkenv_pid);
-				if (phdr->p_vaddr + phdr->p_memsz > si->size)
-					si->size = phdr->p_vaddr + phdr->p_memsz;
-				/* try to remember what range of addresses should be write
-				 * protected */
-				if (!(phdr->p_flags & PF_W)) {
-					intptr_t _end;
-
-					if (si->base + phdr->p_vaddr < si->wrprotect_start)
-						si->wrprotect_start = si->base + phdr->p_vaddr;
-					_end = (((si->base + phdr->p_vaddr + phdr->p_memsz + PAGE_SIZE - 1) &
-						 (~PAGE_MASK)));
-					if (_end > si->wrprotect_end)
-						si->wrprotect_end = _end;
-					/* Make the section writable just in case we'll have to
-					 * write to it during relocation (i.e. text segment).
-					 * However, we will remember what range of addresses
-					 * should be write protected.
-					 */
-					mprotect((void *)(si->base + phdr->p_vaddr),
-						 phdr->p_memsz,
-						 PFLAGS_TO_PROT(phdr->p_flags) | PROT_WRITE);
-				}
-			} else if (phdr->p_type == PT_DYNAMIC) {
-				if (si->dynamic != (ElfW(Dyn) *)-1) {
-					DL_ERR("%5d multiple PT_DYNAMIC segments found in '%s'. "
-					       "Segment at 0x%016lx, previously one found at 0x%016lx",
-					       apkenv_pid, si->name, si->base + phdr->p_vaddr,
-					       (intptr_t)si->dynamic);
-					goto fail;
-				}
-				DEBUG_DUMP_PHDR(phdr, "PT_DYNAMIC", apkenv_pid);
-				si->dynamic = (ElfW(Dyn) *)(si->base + phdr->p_vaddr);
-			} else if (phdr->p_type == PT_GNU_RELRO) {
-				if ((phdr->p_vaddr >= si->size) || ((phdr->p_vaddr + phdr->p_memsz) > si->size) || ((si->base + phdr->p_vaddr + phdr->p_memsz) < si->base)) {
-					DL_ERR("%d invalid GNU_RELRO in '%s' "
-					       "p_vaddr=0x%016lx p_memsz=0x%016lx",
-					       apkenv_pid, si->name,
-					       phdr->p_vaddr, phdr->p_memsz);
-					goto fail;
-				}
-				si->gnu_relro_start = (ElfW(Addr))(si->base + phdr->p_vaddr);
-				si->gnu_relro_len = (size_t)phdr->p_memsz;
-			}
+	for (; phnum > 0; --phnum, ++phdr) {
+		if (phdr->p_type == PT_TLS) {
+			tls_init = (void *)(si->base + phdr->p_vaddr);
+			tls_init_size = phdr->p_filesz;
+			tls_size = phdr->p_memsz;
+			tls_align = phdr->p_align ?: 1;
 		}
 	}
+
+	si->tls_slot_id = __tls_register_module(tls_init, tls_init_size, tls_size, tls_align);
 
 	if (si->dynamic == (ElfW(Dyn) *)-1) {
 		DL_ERR("%5d missing PT_DYNAMIC?!", apkenv_pid);

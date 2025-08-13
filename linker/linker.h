@@ -239,6 +239,7 @@ struct soinfo {
 
 	/* apkenv stuff */
 	char fullpath[SOINFO_NAME_LEN];
+	size_t tls_slot_id;
 };
 
 extern soinfo apkenv_libdl_info;
