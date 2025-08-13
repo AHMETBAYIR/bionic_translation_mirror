@@ -130,7 +130,10 @@ void *bionic_dlsym(void *handle, const char *symbol)
 	char wrap_sym_name[1024] = {'b', 'i', 'o', 'n', 'i', 'c', '_'};
 	memcpy(wrap_sym_name + 7, symbol, MIN(sizeof(wrap_sym_name) - 7, strlen(symbol)));
 
-	bool is_this_our_handle = do_we_have_this_handle(handle);
+	/* technically for RTLD_NEXT / RTLD_DEFAULT we don't know, but it will be dealt with later */
+	bool is_this_our_handle = (handle == RTLD_NEXT || handle == RTLD_DEFAULT);
+	if(!is_this_our_handle)
+		is_this_our_handle = do_we_have_this_handle(handle);
 
 	if (!is_this_our_handle) { // if the handle is not our handle, we can probably just try calling glibc dlsym
 		if ((sym = dlsym(RTLD_DEFAULT, wrap_sym_name))) { // TODO: this is not ideal, we should probably translate all android system libary names to ..._android.so.0 and have those either be symlinks or small libs which depend on the actual lib and in addition implement bionic_ overrides
@@ -142,23 +145,18 @@ void *bionic_dlsym(void *handle, const char *symbol)
 			verbose("system dlopen handle: found system version");
 			return wrapper_create(symbol, sym);
 		}
+
+		/* it's not our handle, so unless it's a special value might as well bail now */
+		set_dlerror(DL_ERR_SYMBOL_NOT_FOUND);
 	}
 
+	/* allow overriding stuff even when the app specifies a particular .so; TODO: we should probably not do this */
 	if ((sym = dlsym(RTLD_DEFAULT, wrap_sym_name))) {
 		pthread_mutex_unlock(&apkenv_dl_lock);
 		verbose("RTLD_DEFAULT: found bionic_ version");
 		return wrapper_create(symbol, sym);
-	} else if ((sym = dlsym(RTLD_DEFAULT, symbol))) {
-		pthread_mutex_unlock(&apkenv_dl_lock);
-		verbose("RTLD_DEFAULT: found system version");
-		return wrapper_create(symbol, sym);
 	} else {
 		verbose("RTLD_DEFAULT: haven't found bionic_ nor system version; dlerror: >%s<", dlerror());
-	}
-
-	if (unlikely(handle == 0)) {
-		set_dlerror(DL_ERR_INVALID_LIBRARY_HANDLE);
-		goto err;
 	}
 
 	if (handle == RTLD_DEFAULT) {
