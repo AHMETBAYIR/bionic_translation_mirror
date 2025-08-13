@@ -82,3 +82,22 @@ char *bionic_getenv(const char *name) {
 
 	return getenv(name);
 }
+
+/* __gnu_strerror_r emulates glibc's strerror_r.
+ * to make sure we get that, we define _GNU_SOURCE.
+ * musl doesn't have any way to get the glibc behavior. */
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
+char* bionic___gnu_strerror_r(int error_number, char* buf, size_t buf_len) {
+#ifdef __GLIBC__
+	return strerror_r(error_number, buf, buf_len);
+#else // musl, or something else POSIX compliant
+	int saved_errno = errno;
+	strerror_r(error_number, buf, buf_len);
+	errno = saved_errno;
+	return buf;
+#endif
+}
