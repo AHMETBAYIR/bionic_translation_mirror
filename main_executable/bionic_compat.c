@@ -11,8 +11,8 @@ extern ElfW(Dyn) _DYNAMIC[];
 
 extern struct r_debug *_r_debug_ptr;
 /* this has to be called from the main executable, since that's the only one guaranteed to have the debug section filled in */
-void init__r_debug() {
-#if defined(_r_debug)
+__attribute__((constructor)) void init__r_debug() {
+#ifdef __GLIBC__
 /* _r_debug is defined by glibc and is declared as extern in link.h*/
 	_r_debug_ptr = &_r_debug;
 #else
@@ -85,7 +85,7 @@ _Thread_local uintptr_t TLS[] = {
 	 *	uintptr_t stack_guard;   // (tp + 5) TLS_SLOT_STACK_GUARD
 	 *	uintptr_t pointer_guard; // (tp + 6) TLS_SLOT_SANITIZER
 	 *	unsigned long int unused_vgetcpu_cache[2]; // (tp + 7/8) TLS_SLOT_ART_THREAD_SELF/TLS_SLOT_DTV
-	 *	
+	 *
 	 *	unsigned int feature_1; // (tp + 9) TLS_SLOT_BIONIC_TLS
 	 *	int __glibc_unused1;    // [cont]
 	 *	void *__private_tm[4];  // (tp + 10) TLS_SLOT_NATIVE_BRIDGE_GUEST_STATE
@@ -111,7 +111,7 @@ _Thread_local uintptr_t TLS[] = {
 	 *	uintptr_t stack_guard;   // (tp + 5) TLS_SLOT_STACK_GUARD
 	 *	uintptr_t pointer_guard; // (tp + 6) TLS_SLOT_SANITIZER
 	 *	int gscope_flag; // (tp + 7) TLS_SLOT_ART_THREAD_SELF
-	 *	
+	 *
 	 *	unsigned int feature_1; // (tp + 8) TLS_SLOT_DTV
 	 *	void *__private_tm[3];  // (tp + 9/10) TLS_SLOT_BIONIC_TLS/TLS_SLOT_NATIVE_BRIDGE_GUEST_STATE
 	 *	void *__private_ss;
