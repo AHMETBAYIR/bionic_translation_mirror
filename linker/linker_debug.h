@@ -68,7 +68,7 @@ extern int apkenv_debug_verbosity;
 #if LINKER_DEBUG_TO_LOG
 extern int android_log_printf(int, const char *, const char *, ...);
 #define _PRINTVF(v, x...)					 \
-		android_log_printf(5 - (v), "[bionic_linker]", x);
+		android_log_printf((v), "[bionic_linker]", x);
 #else /* !LINKER_DEBUG_TO_LOG */
 #define _PRINTVF(v, x...)                      \
 	do {                                      \
@@ -82,16 +82,18 @@ extern int android_log_printf(int, const char *, const char *, ...);
 	} while (0)
 #endif /* LINKER_DEBUG */
 
-#define PRINT(x...) _PRINTVF(3, x)
-#define INFO(x...)  _PRINTVF(3, x)
-#define TRACE(x...) _PRINTVF(3, x)
-#define WARN(fmt, args...) \
-	printf("%s:%d| WARNING: " fmt, __FILE__, __LINE__, ##args)
-#define ERROR(fmt, args...) \
-	printf("%s:%d| ERROR: " fmt, __FILE__, __LINE__, ##args)
+#define PRINT(x...) _PRINTVF(2, x)
+#define INFO(x...)  _PRINTVF(2, x)
+#define TRACE(x...) _PRINTVF(2, x)
+#define WARN(x...) \
+	_PRINTVF(5, "%s:%d| WARNING: ", __FILE__, __LINE__); \
+	_PRINTVF(5, x)
+#define ERROR(x...) \
+	_PRINTVF(6, "%s:%d| ERROR: ", __FILE__, __LINE__); \
+	_PRINTVF(6, x)
 
 #if TRACE_DEBUG
-#define DEBUG(x...) _PRINTVF(2, x)
+#define DEBUG(x...) _PRINTVF(3, x)
 #else /* !TRACE_DEBUG */
 #define DEBUG(x...) \
 	do {        \
