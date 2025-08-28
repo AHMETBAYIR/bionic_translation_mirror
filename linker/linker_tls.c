@@ -130,10 +130,18 @@ struct tls_index
 };
 
 /* this is called by the .so with the module_id (== slot) that we've put in during relocation */
-uintptr_t bionic___tls_get_addr(struct tls_index *idx)
 #if defined(__i386__)
+/* 32 bit x86 uses a different symbol name and calling convention, because
+ * GNU decided that passing the parameter in a register is preferable and didn't
+ * want the name to conflict with the de-facto standard by Sun (which always uses
+ * native calling convention)
+ *
+ * glibc technically provides both, but bionic only supports the GNU version */
+#define bionic___tls_get_addr bionic____tls_get_addr
+
 __attribute__((regparm(1)))
 #endif
+uintptr_t bionic___tls_get_addr(struct tls_index *idx)
 {
 	void *module_base = __tls_get_module(idx->module);
 	if (!module_base)
