@@ -2165,35 +2165,35 @@ static bool apkenv_relocate_relr(soinfo *si) {
 static inline bool apkenv_apply_packed_relocs(soinfo *si, const uint8_t* packed_relocs, const size_t packed_relocs_size) {
 	const uint8_t *current = packed_relocs;
 	const uint8_t *end = packed_relocs + packed_relocs_size;
-	const size_t num_relocs = sleb128_decoder_pop_front(current++, end);
+	const size_t num_relocs = sleb128_decoder_pop_front(&current, end);
 
 	rel_t reloc = {
-		.r_offset = sleb128_decoder_pop_front(current++, end),
+		.r_offset = sleb128_decoder_pop_front(&current, end),
 	};
 
 	for (size_t idx = 0; idx < num_relocs; ) {
-		const size_t group_size = sleb128_decoder_pop_front(current++, end);
-		const size_t group_flags = sleb128_decoder_pop_front(current++, end);
+		const size_t group_size = sleb128_decoder_pop_front(&current, end);
+		const size_t group_flags = sleb128_decoder_pop_front(&current, end);
 
 		size_t group_r_offset_delta = 0;
 
 		if (group_flags & RELOCATION_GROUPED_BY_OFFSET_DELTA_FLAG) {
-			group_r_offset_delta = sleb128_decoder_pop_front(current++, end);
+			group_r_offset_delta = sleb128_decoder_pop_front(&current, end);
 		}
 		if (group_flags & RELOCATION_GROUPED_BY_INFO_FLAG) {
-			//reloc.r_info = decoder.pop_front();
+			reloc.r_info = sleb128_decoder_pop_front(&current, end);
 		}
 
 #if defined(USE_RELA)
 		const size_t group_flags_reloc = group_flags & (RELOCATION_GROUP_HAS_ADDEND_FLAG |
-		RELOCATION_GROUPED_BY_ADDEND_FLAG);
+		                                                RELOCATION_GROUPED_BY_ADDEND_FLAG);
 		if (group_flags_reloc == RELOCATION_GROUP_HAS_ADDEND_FLAG) {
 			// Each relocation has an addend. This is the default situation with lld's current encoder.
 		} else if (group_flags_reloc == (RELOCATION_GROUP_HAS_ADDEND_FLAG |
 		                                 RELOCATION_GROUPED_BY_ADDEND_FLAG)) {
-			//reloc.r_addend += decoder.pop_front();
+			reloc.r_addend += sleb128_decoder_pop_front(&current, end);
 		} else {
-			//reloc.r_addend = 0;
+			reloc.r_addend = 0;
 		}
 #else
 		if (unlikely(group_flags & RELOCATION_GROUP_HAS_ADDEND_FLAG)) {
@@ -2206,19 +2206,20 @@ static inline bool apkenv_apply_packed_relocs(soinfo *si, const uint8_t* packed_
 			if (group_flags & RELOCATION_GROUPED_BY_OFFSET_DELTA_FLAG) {
 				reloc.r_offset += group_r_offset_delta;
 			} else {
-				reloc.r_offset += sleb128_decoder_pop_front(current++, end);
+				reloc.r_offset += sleb128_decoder_pop_front(&current, end);
 			}
 			if ((group_flags & RELOCATION_GROUPED_BY_INFO_FLAG) == 0) {
-				reloc.r_info = sleb128_decoder_pop_front(current++, end);
+				reloc.r_info = sleb128_decoder_pop_front(&current, end);
 			}
 	#if defined(USE_RELA)
 			if (group_flags_reloc == RELOCATION_GROUP_HAS_ADDEND_FLAG) {
-				reloc.r_addend += sleb128_decoder_pop_front(current++, end);
+				reloc.r_addend += sleb128_decoder_pop_front(&current, end);
 			}
 	#endif
 			// FIXME: clean up apkenv_reloc_library so we don't need to do this
 			// (this function expects an array, and will probably be extra slow like this)
-			return apkenv_reloc_library(si, &reloc, 1);
+			fprintf(stderr, "calling apkenv_reloc_library with packed reloc: {.offset = 0x%lx, .r_info = 0x%lx, .r_addend = 0x%lx}\n", reloc.r_offset, reloc.r_info, reloc.r_addend);
+			apkenv_reloc_library(si, &reloc, 1);
 		}
 
 		idx += group_size;

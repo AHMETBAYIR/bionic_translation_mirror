@@ -27,7 +27,8 @@
 // Helper classes for decoding LEB128, used in packed relocation data.
 // http://en.wikipedia.org/wiki/LEB128
 
-__attribute__((always_inline)) inline size_t sleb128_decoder_pop_front(const uint8_t* current_, const uint8_t* const end_) {
+/* current_ passed by reference so it can be advanced */
+__attribute__((always_inline)) inline size_t sleb128_decoder_pop_front(const uint8_t** current_, const uint8_t* const end_) {
 	size_t value = 0;
 	static const size_t size = CHAR_BIT * sizeof(value);
 
@@ -35,11 +36,11 @@ __attribute__((always_inline)) inline size_t sleb128_decoder_pop_front(const uin
 	uint8_t byte;
 
 	do {
-		if (current_ >= end_) {
+		if (*current_ >= end_) {
 			PRINT("sleb128_decoder ran out of bounds");
 			exit(1);
 		}
-		byte = *current_;
+		byte = *(*current_)++;
 		value |= ((size_t)(byte & 127) << shift);
 		shift += 7;
 	} while (byte & 128);
