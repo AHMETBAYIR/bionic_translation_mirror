@@ -428,6 +428,54 @@ int bionic_clock_gettime(clockid_t clockid, struct bionic_timespec *bionic_tp)
 }
 #endif
 
+/* position of ai_canonname and ai_addr are swapped between bionic and glibc/musl */
+struct bionic_addrinfo {
+	int ai_flags;           /* AI_PASSIVE, AI_CANONNAME, AI_NUMERICHOST */
+	int ai_family;          /* PF_xxx */
+	int ai_socktype;        /* SOCK_xxx */
+	int ai_protocol;        /* 0 or IPPROTO_xxx for IPv4 and IPv6 */
+	socklen_t ai_addrlen;   /* length of ai_addr */
+	char *ai_canonname;     /* canonical name for hostname */
+	struct sockaddr *ai_addr;    /* binary address */
+	struct bionic_addrinfo *ai_next;    /* next structure in linked list */
+};
+
+int bionic_getaddrinfo(const char *hostname, const char *servname, const struct bionic_addrinfo *bionic_hints, struct bionic_addrinfo **res)
+{
+	struct addrinfo hints;
+	if (bionic_hints) {
+		memcpy(&hints, bionic_hints, sizeof(hints));
+		hints.ai_canonname = bionic_hints->ai_canonname;
+		hints.ai_addr = bionic_hints->ai_addr;
+	}
+	int result = getaddrinfo(hostname, servname, bionic_hints ? &hints : NULL, (struct addrinfo **)res);
+
+	if(result == 0) {
+		struct bionic_addrinfo *it = *res;
+		while (it) {
+			char *ai_canonname = ((struct addrinfo *)it)->ai_canonname;
+			struct sockaddr *ai_addr = ((struct addrinfo *)it)->ai_addr;
+			it->ai_canonname = ai_canonname;
+			it->ai_addr = ai_addr;
+			it = it->ai_next;
+		}
+	}
+	return result;
+}
+
+void bionic_freeaddrinfo(struct bionic_addrinfo *ai)
+{
+	struct bionic_addrinfo *it = ai;
+	while (it) {
+		char *ai_canonname = it->ai_canonname;
+		struct sockaddr *ai_addr = it->ai_addr;
+		((struct addrinfo *)it)->ai_canonname = ai_canonname;
+		((struct addrinfo *)it)->ai_addr = ai_addr;
+		it = it->ai_next;
+	}
+	freeaddrinfo((struct addrinfo *)ai);
+}
+
 #ifdef VERBOSE_FUNCTIONS
 #include "libc-verbose.h"
 #endif
