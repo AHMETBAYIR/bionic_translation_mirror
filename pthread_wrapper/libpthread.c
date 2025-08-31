@@ -132,7 +132,7 @@ struct bionic_pthread_cleanup_t {
 
 // For checking, if our glibc version is mapped to memory.
 // Used for sanity checking and static initialization below.
-#define IS_MAPPED(x) is_mapped(x->glibc, sizeof(x))
+#define IS_MAPPED(x) is_mapped(x->glibc, sizeof(*x))
 
 // For handling static initialization.
 #define INIT_IF_NOT_MAPPED(x, init) do { if (!IS_MAPPED(x)) init(x); } while(0)
