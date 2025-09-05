@@ -1109,22 +1109,23 @@ apkenv_load_segments(int fd, void *header, soinfo *si)
 			      "(0x%016lx). p_vaddr=0x%016lx p_offset=0x%016lx ]\n",
 			      apkenv_pid, si->name,
 			      tmp, len, phdr->p_vaddr, phdr->p_offset);
-			pbase = mmap((void *)tmp, len, PFLAGS_TO_PROT(phdr->p_flags),
-				     MAP_PRIVATE | MAP_FIXED, fd,
-				     phdr->p_offset & (~PAGE_MASK));
-			if (pbase == MAP_FAILED) {
-				DL_ERR("%d failed to map segment from '%s' @ 0x%016lx (0x%016lx). "
-				       "p_vaddr=0x%016lx p_offset=0x%016lx",
-				       apkenv_pid, si->name,
-				       tmp, len, phdr->p_vaddr, phdr->p_offset);
-				goto fail;
+			if (len != 0) {
+				pbase = mmap((void *)tmp, len, PFLAGS_TO_PROT(phdr->p_flags),
+					     MAP_PRIVATE | MAP_FIXED, fd,
+					     phdr->p_offset & (~PAGE_MASK));
+				if (pbase == MAP_FAILED) {
+					DL_ERR("%d failed to map segment from '%s' @ 0x%016lx (0x%016lx). "
+					       "p_vaddr=0x%016lx p_offset=0x%016lx",
+					       apkenv_pid, si->name,
+					       tmp, len, phdr->p_vaddr, phdr->p_offset);
+					goto fail;
+				}
+
+				/* If 'len' didn't end on page boundary, and it's a writable
+				 * segment, zero-fill the rest. */
+				if ((len & PAGE_MASK) && (phdr->p_flags & PF_W))
+					memset((void *)(pbase + len), 0, PAGE_SIZE - (len & PAGE_MASK));
 			}
-
-			/* If 'len' didn't end on page boundary, and it's a writable
-			 * segment, zero-fill the rest. */
-			if ((len & PAGE_MASK) && (phdr->p_flags & PF_W))
-				memset((void *)(pbase + len), 0, PAGE_SIZE - (len & PAGE_MASK));
-
 			/* Check to see if we need to extend the map for this segment to
 			 * cover the diff between filesz and memsz (i.e. for bss).
 			 *
@@ -1152,8 +1153,9 @@ apkenv_load_segments(int fd, void *header, soinfo *si)
 			 *                  |                     |
 			 *                 _+---------------------+  page boundary
 			 */
-			tmp = (ElfW(Addr))(((intptr_t)pbase + len + PAGE_SIZE - 1) &
-					   (~PAGE_MASK));
+			if (len != 0)
+				tmp = (ElfW(Addr))(((intptr_t)pbase + len + PAGE_SIZE - 1) & (~PAGE_MASK));
+
 			if (tmp < (base + phdr->p_vaddr + phdr->p_memsz)) {
 				extra_len = base + phdr->p_vaddr + phdr->p_memsz - tmp;
 				TRACE("[ %5d - Need to extend segment from '%s' @ 0x%016lx "
@@ -1185,6 +1187,10 @@ apkenv_load_segments(int fd, void *header, soinfo *si)
 				      apkenv_pid, si->name, (uint64_t)extra_base,
 				      extra_len);
 			}
+
+			if (len == 0)
+				pbase = extra_base;
+
 			/* set the len here to show the full extent of the segment we
 			 * just loaded, mostly for debugging */
 			len = (((intptr_t)base + phdr->p_vaddr + phdr->p_memsz +
