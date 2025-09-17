@@ -2205,10 +2205,13 @@ static inline bool apkenv_apply_packed_relocs(soinfo *si, const uint8_t* packed_
 		if (unlikely(group_flags & RELOCATION_GROUP_HAS_ADDEND_FLAG)) {
 			// This platform does not support rela, and yet we have it encoded in android_rel section.
 			DL_ERR("unexpected r_addend in android.rel section");
+			return false;
 		}
 #endif
 
 		for (size_t i = 0; i < group_size; ++i) {
+			int ret;
+
 			if (group_flags & RELOCATION_GROUPED_BY_OFFSET_DELTA_FLAG) {
 				reloc.r_offset += group_r_offset_delta;
 			} else {
@@ -2217,15 +2220,21 @@ static inline bool apkenv_apply_packed_relocs(soinfo *si, const uint8_t* packed_
 			if ((group_flags & RELOCATION_GROUPED_BY_INFO_FLAG) == 0) {
 				reloc.r_info = sleb128_decoder_pop_front(&current, end);
 			}
-	#if defined(USE_RELA)
+#if defined(USE_RELA)
 			if (group_flags_reloc == RELOCATION_GROUP_HAS_ADDEND_FLAG) {
 				reloc.r_addend += sleb128_decoder_pop_front(&current, end);
 			}
-	#endif
+#endif
 			// FIXME: clean up apkenv_reloc_library so we don't need to do this
 			// (this function expects an array, and will probably be extra slow like this)
+#if defined(USE_RELA)
 			fprintf(stderr, "calling apkenv_reloc_library with packed reloc: {.offset = 0x%lx, .r_info = 0x%lx, .r_addend = 0x%lx}\n", reloc.r_offset, reloc.r_info, reloc.r_addend);
-			apkenv_reloc_library(si, &reloc, 1);
+#else
+			fprintf(stderr, "calling apkenv_reloc_library with packed reloc: {.offset = 0x%lx, .r_info = 0x%lx}\n", reloc.r_offset, reloc.r_info);
+#endif
+			ret = apkenv_reloc_library(si, &reloc, 1);
+			if (unlikely(ret))
+				return false;
 		}
 
 		idx += group_size;
