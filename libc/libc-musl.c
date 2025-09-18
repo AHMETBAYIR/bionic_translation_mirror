@@ -23,16 +23,20 @@
 
 #ifndef __GLIBC__
 
-long long int strtoll_l(const char *restrict nptr, char **restrict endptr, int base, locale_t loc)
+/* TODO: implement bionic_error, which will use these. */
+unsigned int bionic_error_message_count = 0;
+typeof(void (*)(void)) bionic_error_print_progname = NULL;
+
+long long int bionic_strtoll_l(const char *restrict nptr, char **restrict endptr, int base, locale_t loc)
 {
 	return strtoll(nptr, endptr, base);
 }
 
-unsigned long long strtoull_l(const char *nptr, char **endptr, int base, locale_t) {
+unsigned long long bionic_strtoull_l(const char *nptr, char **endptr, int base, locale_t) {
 	return strtoull(nptr, endptr, base);
 }
 
-struct cmsghdr * __cmsg_nxthdr(struct msghdr *msg, struct cmsghdr *cmsg) {
+struct cmsghdr * bionic___cmsg_nxthdr(struct msghdr *msg, struct cmsghdr *cmsg) {
 	return CMSG_NXTHDR(msg, cmsg);
 }
 
@@ -122,11 +126,11 @@ int bionic_lstat64(const char *filename, struct stat *buf)
 	return lstat(filename, buf);
 }
 
-int statfs64(const char *file, struct statfs *buf)
+int bionic_statfs64(const char *file, struct statfs *buf)
 {
 	return statfs(file, buf);
 }
-int statvfs64(const char *file, struct statfs *buf)
+int bionic_statvfs64(const char *file, struct statfs *buf)
 {
 	return statfs(file, buf);
 }
