@@ -74,6 +74,21 @@ pthread_bio = shared_library('pthread_bio', [
                                             	'-lpthread' # dependency('threads') doesn't express that we specifically need pthreads
                                             ])
 
+libc_bio_hardcoded_symbols = [
+	# glibc on most arches and all the ones that we support, and musl on all arches that
+	# *it* supports, define FE_DFL_ENV as -1; bionic defines it as &__fe_dfl_env */
+	'-Wl,--defsym,__fe_dfl_env=-1'
+]
+
+# meson doesn't let us just check for 32bit in general
+if (host_machine.cpu_family() == 'arm' or host_machine.cpu_family() == 'x86' or get_option('c_link_args').contains('-m32'))
+	# This symbol looks annoying to support properly, and likely no actual app will ever use it.
+	# It is however needed by the testsuite, so hopefully this will make sure to let us know if
+	# any actual app tries to use it. (the 0th page should cause a segfault, which in the worst
+	# case of the app swallowing it will still be caught by gdb)
+	libc_bio_hardcoded_symbols += '-Wl,--defsym,__bionic_brk=0x123'
+endif
+
 # libc_bio.so - c_bio looks weird, but remember that 'lib' will be prepended automatically
 shared_library('c_bio', [
                         	'libc/libc.c',
@@ -103,6 +118,7 @@ shared_library('c_bio', [
                         	'-D_GNU_SOURCE'
                         ],
                         link_args: [
+				libc_bio_hardcoded_symbols,
                         	'-Wl,-wrap,_IO_file_xsputn',
                         	'-Wl,--no-as-needed', # needed to put stuff in DT_NEEDED that we don't necessarily directly use (sadly this doesn't apply to the link_with libraries, since they are specified before this on the cmdline)
                         	pthread_bio.full_path() # as-needed is the default on some platforms, and the explicit no-as-needed above only applies to libraries specified after it
