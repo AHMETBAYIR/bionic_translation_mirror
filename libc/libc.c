@@ -340,17 +340,6 @@ void bionic___stack_chk_fail(void)
 	abort();
 }
 
-size_t
-bionic___strlen_chk(const char *s, size_t s_len)
-{
-	const size_t ret = strlen(s);
-	if (__builtin_expect(ret >= s_len, 0)) {
-		fprintf(stderr, "*** strlen read overflow detected ***\n");
-		abort();
-	}
-	return ret;
-}
-
 #include "libc-sysconf.h"
 
 long bionic_sysconf(int name)
