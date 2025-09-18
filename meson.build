@@ -77,6 +77,7 @@ shared_library('c_bio', [
                         	'libc/libc-math.c',
                         	'libc/libc-misc.c',
                         	'libc/libc-musl.c',
+                           	'libc/libc-signal.c',
                            	'libc/libc-stdio.c',
                            	'libc/libc-sha1.c',
                            	'libc/libc-open-overrides.c',
