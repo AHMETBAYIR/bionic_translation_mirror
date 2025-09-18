@@ -1953,6 +1953,9 @@ static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 		case R_GENERIC_TLS_DTPMOD:
 			*((ElfW(Addr) *)reloc) = si->tls_slot_id;
 			break;
+		case R_GENERIC_TLS_DTPREL:
+			*((ElfW(Addr) *)reloc) = sym_addr + get_addend(rel);
+			break;
 #if defined(__aarch64__)
 		case R_AARCH64_ABS64:
 			COUNT_RELOC(RELOC_ABSOLUTE);
