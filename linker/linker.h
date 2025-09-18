@@ -35,8 +35,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define likely(expr)   __builtin_expect(expr, 1)
-#define unlikely(expr) __builtin_expect(expr, 0)
+#define likely(expr)   __builtin_expect((bool)expr, 1)
+#define unlikely(expr) __builtin_expect((bool)expr, 0)
 
 #if defined(__aarch64__) || defined(__x86_64__)
 #define USE_RELA

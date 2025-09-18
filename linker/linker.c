@@ -1781,6 +1781,8 @@ static inline ElfW(Addr) get_addend(REL_TYPE *rel) {
 #endif
 }
 
+static bool die_because_of_missing_symbols = false;
+
 static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 {
 	ElfW(Sym) *s;
@@ -1808,25 +1810,25 @@ static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 			memcpy(wrap_sym_name + 7, sym_name, MIN(sizeof(wrap_sym_name) - 7, strlen(sym_name)));
 			sym_addr = 0;
 
-			if ((sym_addr = (intptr_t)dlsym(RTLD_DEFAULT, wrap_sym_name))) {
+			if ((sym_addr = (uintptr_t)dlsym(RTLD_DEFAULT, wrap_sym_name))) {
 				LINKER_DEBUG_PRINTF("%s hooked symbol %s to %p\n", si->name, wrap_sym_name, (void *)sym_addr);
 			} else if ((s = apkenv__do_lookup(si, sym_name, &base))) {
 				// normal symbol
-			} else if ((sym_addr = (intptr_t)dlsym(RTLD_DEFAULT, sym_name))) {
+			} else if ((sym_addr = (uintptr_t)dlsym(RTLD_DEFAULT, sym_name))) {
 				if (strstr(sym_name, "pthread_"))
 					fprintf(stderr, "symbol may need to be wrapped: %s\n", sym_name);
 				LINKER_DEBUG_PRINTF("%s hooked symbol %s to %p\n", si->name, sym_name, (void *)sym_addr);
 			} else if (!sym_addr && !strncmp(sym_name, "gl", 2)) {
 				LINKER_DEBUG_PRINTF("=======================================\n");
 				LINKER_DEBUG_PRINTF("%s symbol %s is an OpenGL extension?\n", si->name, sym_name);
-				if ((sym_addr = (intptr_t)eglGetProcAddress(sym_name)))
+				if ((sym_addr = (uintptr_t)eglGetProcAddress(sym_name)))
 					LINKER_DEBUG_PRINTF("%s hooked symbol %s to %016lx\n", si->name, sym_name, sym_addr);
 			} else if (!strcmp(sym_name, "sigsetjmp")) {
 				// we can't wrap this, so we need to substitute it for the correct function here
 				// __sigsetjmp is the glibc version, but the musl version is just sigsetjmp so it should be resolved properly by dslsym
 				// and not get here
 #ifdef __GLIBC__
-				sym_addr = (intptr_t)&__sigsetjmp;
+				sym_addr = (uintptr_t)&__sigsetjmp;
 #else
 				fprintf(stderr, "sigsetjmp special handling shouldn't be needed on musl\n");
 				exit(1);
@@ -1854,6 +1856,10 @@ static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 				s = &si->symtab[sym];
 				if (ELF_ST_BIND(s->st_info) != STB_WEAK) {
 					DL_ERR("cannot locate symbol \"%s\" referenced by \"%s\"...", sym_name, si->name);
+					if(getenv("LINKER_PRINT_MISSING_SYMBOLS_AND_DIE")) {
+						die_because_of_missing_symbols = true;
+						return 0;
+					}
 					return -1;
 				}
 				/* IHI0044C AAELF 4.5.1.1:
@@ -1902,7 +1908,7 @@ static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 #endif
 
 				default:
-					DL_ERR("unknown weak reloc type %d @ %p (%zu)", type, rel, idx);
+					DL_ERR("unknown weak reloc type %d @ %p (%zu) | (%s in %s)", type, rel, idx, sym_name, si->name);
 					return -1;
 				}
 			} else {
@@ -2117,6 +2123,10 @@ static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 #endif
 		default:
 			DL_ERR("unknown reloc type %d @ %p (%zu)", type, rel, idx);
+			if(getenv("LINKER_IGNORE_UNKNOWN_RELOCS")) {
+				*((ElfW(Addr) *)reloc) = 0xBAADBAAD;
+				break;
+			}
 			return -1;
 		}
 	}
@@ -2866,6 +2876,11 @@ static int apkenv_link_image(soinfo *si, /*unused...?*/ unsigned wr_offset)
 			       apkenv_pid, si->name, errno, strerror(errno));
 			goto fail;
 		}
+	}
+
+	if(unlikely(die_because_of_missing_symbols)) {
+		DL_ERR("couldn't find symbol(s) during relocation; LINKER_PRINT_MISSING_SYMBOLS_AND_DIE was set, so all missing symbols should be in the log");
+		goto fail;
 	}
 
 	/* If this is a SET?ID program, dup /dev/null to opened stdin,
