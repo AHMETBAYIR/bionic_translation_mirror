@@ -1,5 +1,8 @@
 project('android_translation_layer', ['c', 'cpp'], default_options: ['b_lundef=false', 'b_asneeded=false'])
 
+cc = meson.get_compiler('c')
+libm_dep = cc.find_library('m', required : false)
+
 config = declare_dependency(sources: [
                             	'shared/config/config.c'
                             ],
@@ -33,6 +36,7 @@ shared_library('dl_bio', [
                          dependencies: [
                          	dependency('dl'),
                          	dependency('egl'),
+                         	dependency('libelf'),
                          	config,
                          ],
                          link_with: [
@@ -87,6 +91,7 @@ shared_library('c_bio', [
                         dependencies: [
                         	dependency('libbsd'),
                         	dependency('libunwind'),
+				libm_dep, # TODO: have separate libm_bio? (note: on musl this is a noop)
                         ],
                         link_with: [
                         	wrapper,
