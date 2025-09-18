@@ -23,7 +23,7 @@ wrapper = static_library('wrapper', [
                                     	'-fvisibility=hidden'
                                     ])
 
-shared_library('dl_bio', [
+dl_bio = shared_library('dl_bio', [
                          	'linker/dlfcn.c',
                          	'linker/linker.c',
                          	'linker/linker_environ.c',
@@ -143,3 +143,5 @@ install_data([
              	'cfg.d/bionic_translation.cfg'
              ],
              install_dir: get_option('datadir') / 'bionic_translation/cfg.d')
+
+subdir('tests')

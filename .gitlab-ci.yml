@@ -1,6 +1,6 @@
 trigger_job:
   rules:
-    - if: ($CI_PIPELINE_SOURCE != "merge_request_event") && ($CI_COMMIT_BRANCH == 'master')
+    - if: ($CI_PIPELINE_SOURCE != 'merge_request_event') && ($CI_COMMIT_BRANCH == 'master')
   variables:
     # the build script assumes it's run from a MR context
     CI_MERGE_REQUEST_TARGET_BRANCH_NAME: master
@@ -10,3 +10,37 @@ trigger_job:
   trigger:
     project: android_translation_layer/aports
     branch: atl-nightlies-bionic_translation
+
+.test_job:
+  interruptible: true
+  script:
+    - apk add meson gcc musl-dev g++ pc:egl pc:libelf pc:libbsd pc:libunwind
+    - cd ${CI_PROJECT_DIR} && meson setup build && meson test -C build
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+
+.test_job-musl:
+  extends: .test_job
+  image:
+    name: alpine:edge
+
+
+test_job-musl-x86_64:
+  extends: .test_job-musl
+  tags:
+    - saas-linux-small-amd64
+
+
+test_job-musl-x86:
+  extends: .test_job-musl
+  image:
+    entrypoint: ["linux32", "sh", "-c"]
+    docker:
+      platform: linux/i386
+  tags:
+    - saas-linux-small-amd64
+
+test_job-musl-aarch64:
+  extends: .test_job-musl
+  tags:
+    - saas-linux-small-arm64
