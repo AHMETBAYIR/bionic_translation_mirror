@@ -223,6 +223,10 @@ int bionic_dladdr(const void *addr, Dl_info *info)
 
 	pthread_mutex_unlock(&apkenv_dl_lock);
 
+	/* don't use else because this shouldn't be inside the critical zone */
+	if (!si)
+		return dladdr(addr, info);
+
 	return ret;
 }
 

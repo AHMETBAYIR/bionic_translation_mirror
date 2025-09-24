@@ -422,7 +422,10 @@ int bionic_dl_iterate_phdr(int (*cb)(struct dl_phdr_info *info, size_t size, voi
 		if ((rv = cb(&dl_info, sizeof(struct dl_phdr_info), data)) != 0)
 			break;
 	}
-	return rv;
+	if (rv)
+		return rv;
+	else
+		return dl_iterate_phdr(cb, data);
 }
 #endif
 
