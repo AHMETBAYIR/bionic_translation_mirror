@@ -24,7 +24,21 @@ endif
 
 arch = host_machine.cpu_family()
 
-test('bionic_tests_from_cts', sh, protocol: 'gtest', timeout: 5 * 60,
-     env: [ 'BUILDDIR_PATH=' + meson.project_build_root(), 'LINKER_IGNORE_UNKNOWN_RELOCS=' ],
-     args: ['-c', _run_in_bwrap+' '+test_runner.full_path()+' '+testsuite_dir+' '
-            +'--gtest_filter=`sh '+get_expected_to_pass+' '+libc+' '+arch+' '+expected_to_pass_dir+'`' ])
+test_cmd = ' '.join([_run_in_bwrap, test_runner.full_path(), testsuite_dir, '--gtest_filter=`sh '+get_expected_to_pass+' '+libc+' '+arch+' '+expected_to_pass_dir+'`'])
+
+test('bionic_tests_from_cts',
+	sh,
+	args: [ '-c', test_cmd ],
+	depends: [
+		test_runner,
+		pthread_bio,
+		c_bio,
+		stdcpp_bio,
+	],
+	protocol: 'gtest',
+	timeout: 3 * 60, # typically < 30
+	env: [
+		'BUILDDIR_PATH=' + meson.project_build_root(),
+		'LINKER_IGNORE_UNKNOWN_RELOCS='
+	],
+)

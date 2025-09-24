@@ -12,12 +12,18 @@ trigger_job:
     branch: atl-nightlies-bionic_translation
 
 .test_job:
-  interruptible: true
-  script:
-    - apk add meson gcc musl-dev g++ pc:egl pc:libelf pc:libbsd pc:libunwind
-    - cd ${CI_PROJECT_DIR} && meson setup build && meson test -C build
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+  script:
+    - apk add meson gcc musl-dev g++ pc:egl pc:libelf pc:libbsd pc:libunwind bubblewrap tzdata
+    - cd ${CI_PROJECT_DIR} && meson setup build && meson test -C build
+  artifacts:
+    when: always
+    paths:
+      - ${CI_PROJECT_DIR}/build
+  interruptible: true
 
 .test_job-musl:
   extends: .test_job

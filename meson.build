@@ -101,7 +101,7 @@ if (host_machine.cpu_family() == 'arm' or host_machine.cpu_family() == 'x86' or 
 endif
 
 # libc_bio.so - c_bio looks weird, but remember that 'lib' will be prepended automatically
-shared_library('c_bio',
+c_bio = shared_library('c_bio',
 	sources: [
 		'libc/libc.c',
 		'libc/libc-chk.c',
@@ -136,7 +136,7 @@ shared_library('c_bio',
 	]
 )
 
-shared_library('stdc++_bio',
+stdcpp_bio = shared_library('stdc++_bio',
 	sources: [
 		'libstdc++_standalone/new.cpp',
 		'libstdc++_standalone/__cxa_pure_virtual.cpp',

@@ -17,7 +17,7 @@ FILE * bionic_popen(const char* command, const char* mode)
 	return popen(new_command, mode);
 }
 
-#if defined(__i386__)|| defined(__aarch64__)
+#if defined(__i386__) || defined(__aarch64__)
 /* musl doesn't have on_exit, so we have to do this shit...
  * do it on glibc as well for consistency */
 static int on_exit_status = -1;

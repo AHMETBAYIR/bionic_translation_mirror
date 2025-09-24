@@ -15,10 +15,6 @@ fenv.fegetenv_fesetenv_rounding_mode
 fenv.fesetround_fegetround_FE_DOWNWARD
 fenv.fesetround_fegetround_FE_TOWARDZERO
 fenv.fesetround_fegetround_FE_UPWARD
-grp.getgrgid_app_id_u1_non_exist
-grp.getgrgid_app_id_u31_non_exist
-grp.getgrnam_non_exist
-grp.getpgram_app_id_not_allowed_platform
 ifunc.hwcap
 malloc.valloc_overflow
 malloc.valloc_std
@@ -38,14 +34,9 @@ math_h.scalbnl
 math_h.significandl
 math_h.tgammal
 mntent.mntent_smoke
-pthread_CondWakeupTest.signal_timedwait_CLOCK_MONOTONIC_np
 pthread.pthread_attr_setinheritsched__PTHREAD_INHERIT_SCHED__PTHREAD_EXPLICIT_SCHED
 pthread.pthread_setaffinity_np_failure
 pty.bug_28979140
-pwd.getpwnam_app_id_not_allowed_platform
-pwd.getpwnam_non_exist
-pwd.getpwuid_app_id_u1_non_exist
-pwd.getpwuid_app_id_u31_non_exist
 sched.clone
 sched.sched_setaffinity_failure
 semaphore.sem_wait__sem_post
@@ -85,7 +76,6 @@ sys_socket.sendmmsg_error
 sys_socket.sendmmsg_smoke
 sys_uio.process_vm_readv
 sys_uio.process_vm_writev
-threads_DeathTest.thrd_exit_main_thread
 unistd.gettid_caching_and_pthread_create
 unistd_nofortify.gettid_caching_and_pthread_create
 wchar.wcstod

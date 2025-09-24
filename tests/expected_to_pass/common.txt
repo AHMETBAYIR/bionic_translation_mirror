@@ -189,7 +189,6 @@ getcwd.auto_reasonable
 getcwd.manual_path_max
 getcwd.manual_too_small
 getcwd.manual_zero
-grp.getgrouplist
 iconv.iconv_E2BIG
 iconv.iconv_EILSEQ_ascii
 iconv.iconv_EILSEQ_utf16be_low_surrogate_first
@@ -217,7 +216,6 @@ iconv.iconv_round_trip_utf8
 iconv.iconv_round_trip_wchar_t
 iconv.iconv_smoke
 ifaddrs.dump
-ifaddrs.errno_EMFILE
 ifaddrs.freeifaddrs_null
 ifaddrs.getifaddrs_INET
 ifaddrs.getifaddrs_interfaces
@@ -1232,7 +1230,6 @@ unistd._Fork
 unistd.fsync
 unistd.get_cpu_count_from_string
 unistd.getenv_unsetenv
-unistd.getlogin_r
 unistd.getpid_caching_and_clone
 unistd.getpid_caching_and_fork
 unistd.getpid_caching_and_pthread_create
@@ -1265,7 +1262,6 @@ unistd_nofortify._Fork
 unistd_nofortify.fsync
 unistd_nofortify.get_cpu_count_from_string
 unistd_nofortify.getenv_unsetenv
-unistd_nofortify.getlogin_r
 unistd_nofortify.getpid_caching_and_clone
 unistd_nofortify.getpid_caching_and_fork
 unistd_nofortify.getpid_caching_and_pthread_create
