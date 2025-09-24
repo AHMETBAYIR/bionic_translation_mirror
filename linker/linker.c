@@ -53,6 +53,9 @@
 #include <sys/param.h>
 
 #include <libgen.h>
+/* we need to link against libunwind anyway, might as well use it */
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
 
 /* eglGetProcAddress to import funny extensions that Android exports but Mesa sometimes doesn't */
 #include <EGL/egl.h>
@@ -1623,148 +1626,82 @@ funcptr _make_copy_of_function(funcptr func, void *func_adj_data_addr, void *dat
 /* --- end of to-move code */
 
 struct stub_func_adj_data {
-	int (*printf)(const char *restrict format, ...);
-	void (*exit)(int status);
+	void (*print_missing_func_and_exit)(const char *sym_name);
 	const char *orig_func_name;
 };
 
 COPYABLE_FUNC(symbol_not_linked_stub)
 {
-	// char fmt_str[] = "..." seems to still use a string literal on aarch64 (anything with fixed width instructions possibly?)
-	// the following was used to work around this (first letter ommited since `cat -n` is 1-indexed):
-	// echo "BORTING: LINKER_DIE_AT_RUNTIME was set, and someone called a function which we weren't able to link (symbol name: >%s<)" | sed -E "s/(.)/\1\n/g" | cat -n | sed -E "s/ *([^ \t]*)[ \t]*(.)/fmt_str[\1] = '\2';/" | sed "s/'''/\'\\\\''/
-	char fmt_str[122];
-	fmt_str[0] = 'A';
-	fmt_str[1] = 'B';
-	fmt_str[2] = 'O';
-	fmt_str[3] = 'R';
-	fmt_str[4] = 'T';
-	fmt_str[5] = 'I';
-	fmt_str[6] = 'N';
-	fmt_str[7] = 'G';
-	fmt_str[8] = ':';
-	fmt_str[9] = ' ';
-	fmt_str[10] = 'L';
-	fmt_str[11] = 'I';
-	fmt_str[12] = 'N';
-	fmt_str[13] = 'K';
-	fmt_str[14] = 'E';
-	fmt_str[15] = 'R';
-	fmt_str[16] = '_';
-	fmt_str[17] = 'D';
-	fmt_str[18] = 'I';
-	fmt_str[19] = 'E';
-	fmt_str[20] = '_';
-	fmt_str[21] = 'A';
-	fmt_str[22] = 'T';
-	fmt_str[23] = '_';
-	fmt_str[24] = 'R';
-	fmt_str[25] = 'U';
-	fmt_str[26] = 'N';
-	fmt_str[27] = 'T';
-	fmt_str[28] = 'I';
-	fmt_str[29] = 'M';
-	fmt_str[30] = 'E';
-	fmt_str[31] = ' ';
-	fmt_str[32] = 'w';
-	fmt_str[33] = 'a';
-	fmt_str[34] = 's';
-	fmt_str[35] = ' ';
-	fmt_str[36] = 's';
-	fmt_str[37] = 'e';
-	fmt_str[38] = 't';
-	fmt_str[39] = ',';
-	fmt_str[40] = ' ';
-	fmt_str[41] = 'a';
-	fmt_str[42] = 'n';
-	fmt_str[43] = 'd';
-	fmt_str[44] = ' ';
-	fmt_str[45] = 's';
-	fmt_str[46] = 'o';
-	fmt_str[47] = 'm';
-	fmt_str[48] = 'e';
-	fmt_str[49] = 'o';
-	fmt_str[50] = 'n';
-	fmt_str[51] = 'e';
-	fmt_str[52] = ' ';
-	fmt_str[53] = 'c';
-	fmt_str[54] = 'a';
-	fmt_str[55] = 'l';
-	fmt_str[56] = 'l';
-	fmt_str[57] = 'e';
-	fmt_str[58] = 'd';
-	fmt_str[59] = ' ';
-	fmt_str[60] = 'a';
-	fmt_str[61] = ' ';
-	fmt_str[62] = 'f';
-	fmt_str[63] = 'u';
-	fmt_str[64] = 'n';
-	fmt_str[65] = 'c';
-	fmt_str[66] = 't';
-	fmt_str[67] = 'i';
-	fmt_str[68] = 'o';
-	fmt_str[69] = 'n';
-	fmt_str[70] = ' ';
-	fmt_str[71] = 'w';
-	fmt_str[72] = 'h';
-	fmt_str[73] = 'i';
-	fmt_str[74] = 'c';
-	fmt_str[75] = 'h';
-	fmt_str[76] = ' ';
-	fmt_str[77] = 'w';
-	fmt_str[78] = 'e';
-	fmt_str[79] = ' ';
-	fmt_str[80] = 'w';
-	fmt_str[81] = 'e';
-	fmt_str[82] = 'r';
-	fmt_str[83] = 'e';
-	fmt_str[84] = 'n';
-	fmt_str[85] = '\'';
-	fmt_str[86] = 't';
-	fmt_str[87] = ' ';
-	fmt_str[88] = 'a';
-	fmt_str[89] = 'b';
-	fmt_str[90] = 'l';
-	fmt_str[91] = 'e';
-	fmt_str[92] = ' ';
-	fmt_str[93] = 't';
-	fmt_str[94] = 'o';
-	fmt_str[95] = ' ';
-	fmt_str[96] = 'l';
-	fmt_str[97] = 'i';
-	fmt_str[98] = 'n';
-	fmt_str[99] = 'k';
-	fmt_str[100] = ' ';
-	fmt_str[101] = '(';
-	fmt_str[102] = 's';
-	fmt_str[103] = 'y';
-	fmt_str[104] = 'm';
-	fmt_str[105] = 'b';
-	fmt_str[106] = 'o';
-	fmt_str[107] = 'l';
-	fmt_str[108] = ' ';
-	fmt_str[109] = 'n';
-	fmt_str[110] = 'a';
-	fmt_str[111] = 'm';
-	fmt_str[112] = 'e';
-	fmt_str[113] = ':';
-	fmt_str[114] = ' ';
-	fmt_str[115] = '>';
-	fmt_str[116] = '%';
-	fmt_str[117] = 's';
-	fmt_str[118] = '<';
-	fmt_str[119] = ')';
-	fmt_str[120] = '\n';
-	fmt_str[121] = '\0';
 	struct stub_func_adj_data *adj_data = FUNC_ADJ_VAR(symbol_not_linked_stub);
-	adj_data->printf(fmt_str, adj_data->orig_func_name);
-	adj_data->exit(1);
+	adj_data->print_missing_func_and_exit(adj_data->orig_func_name);
+}
+
+/* FIXME: figure out how to put this in dlfcn.h */
+int bionic_dladdr(const void *addr, Dl_info *info);
+
+void print_backtrace()
+{
+	unw_context_t context;
+	unw_cursor_t cursor;
+	unw_getcontext(&context);
+	unw_init_local(&cursor, &context);
+
+	/* print a simple backtrace; obviously gdb will do better */
+	printf("simple backtrace:\n");
+
+	/* unwind info is in ELF sections, so we need to make sure libunwind knows about the elf files loaded by our linker */
+	unw_set_iterate_phdr_function(unw_local_addr_space, &bionic_dl_iterate_phdr);
+
+	do {
+		unw_word_t offset, pc;
+		char sym[4096];
+		if (unw_get_reg(&cursor, UNW_REG_IP, &pc))
+			printf("ERROR: cannot read program counter\n");
+
+		printf("0x%lx: ", pc);
+
+		if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
+			printf("(%s+0x%lx) via unw_get_proc_name\n", sym, offset);
+		} else {
+			Dl_info info = {0};
+			bionic_dladdr((void *)pc, &info);
+			size_t rel_pc = (void *)pc - info.dli_fbase;
+
+			if(info.dli_fname) {
+				printf("[0x%zx]", rel_pc);
+				if (info.dli_sname)
+					printf(" (%s+0x%zx)", info.dli_sname, (size_t)info.dli_fbase - (size_t)info.dli_saddr);
+				printf(" in %s\n", info.dli_fname);
+			} else {
+				printf("-- no symbol name found\n");
+			}
+		}
+	} while (unw_step(&cursor) > 0);
+
+	printf("--- end of backtrace; if you can reproduce this, you should use gdb to get a better one\n");
+}
+
+void print_missing_func_and_exit(const char *sym_name)
+{
+	printf("ABORTING: LINKER_DIE_AT_RUNTIME was set, and someone called a function which we weren't able to link (symbol name: >%s<)\n", sym_name);
+
+	print_backtrace();
+	printf("NOTE: if unwinding through the stub failed, you can use `LINKER_DIE_AT_RUNTIME=backtrace` which doesn't use self-modifying code\n");
+	exit(1);
+}
+
+void backtrace_stub_func()
+{
+	printf("ABORTING: LINKER_DIE_AT_RUNTIME=backtrace was set, and someone called a function which we weren't able to link.\nL"
+	       "NOTE: use LINKER_DIE_AT_RUNTIME= (without backtrace) to get the symbol name\n");
+	print_backtrace();
+
+	exit(1);
 }
 
 static ElfW(Addr) prepare_stub_func(const char* sym_name) {
 	struct stub_func_adj_data *data = malloc(sizeof(struct stub_func_adj_data));
-	data->printf = &printf;
-	data->exit = &exit;
+	data->print_missing_func_and_exit = &print_missing_func_and_exit;
 	data->orig_func_name = sym_name;
 	return (intptr_t)make_copy_of_function(symbol_not_linked_stub, data);
 }
@@ -1838,11 +1775,17 @@ static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 #endif
 			} else {
 				// symbol not found
-				if (getenv("LINKER_DIE_AT_RUNTIME")) {
+				const char *die_at_runtime;
+				if (die_at_runtime = getenv("LINKER_DIE_AT_RUNTIME")) {
 					// if this special env is set, and the symbol is a function, link in a stub which only fails when it's actually called
 					if (ELF_ST_TYPE(si->symtab[sym].st_info) == STT_FUNC) {
-						sym_addr = prepare_stub_func(sym_name);
-						fprintf(stderr, "%s hooked symbol %s to symbol_not_linked_stub (LINKER_DIE_AT_RUNTIME)\n", si->name, sym_name);
+						if(!strcmp(die_at_runtime, "backtrace")) {
+							sym_addr = (uintptr_t)&backtrace_stub_func;
+							fprintf(stderr, "%s hooked symbol %s to backtrace_stub_func (LINKER_DIE_AT_RUNTIME=backtrace)\n", si->name, sym_name);
+						} else {
+							sym_addr = prepare_stub_func(sym_name);
+							fprintf(stderr, "%s hooked symbol %s to symbol_not_linked_stub (LINKER_DIE_AT_RUNTIME)\n", si->name, sym_name);
+						}
 					}
 				}
 			}

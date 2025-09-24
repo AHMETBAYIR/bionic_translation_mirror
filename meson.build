@@ -46,6 +46,7 @@ dl_bio = shared_library('dl_bio',
 		dependency('dl'),
 		dependency('egl'),
 		dependency('libelf'),
+		dependency('libunwind'), # needed by libc_bio anyway, so might as well use it here
 		config,
 	],
 	link_with: [
@@ -117,7 +118,7 @@ shared_library('c_bio',
 	dependencies: [
 		dependency('libbsd'),
 		dependency('libunwind'), # see comments on https://reviews.llvm.org/D78787; for 32bit arm we may need more fun
-					libm_dep, # TODO: have separate libm_bio? (note: on musl this is a noop)
+		libm_dep, # TODO: have separate libm_bio? (note: on musl this is a noop)
 	],
 	link_with: [
 		wrapper,
