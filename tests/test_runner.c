@@ -17,7 +17,7 @@ FILE * bionic_popen(const char* command, const char* mode)
 	return popen(new_command, mode);
 }
 
-#if defined(__i386__) || defined(__aarch64__)
+#if defined(__i386__)
 /* musl doesn't have on_exit, so we have to do this shit...
  * do it on glibc as well for consistency */
 static int on_exit_status = -1;
@@ -53,19 +53,16 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-#if defined(__i386__) || defined(__aarch64__)
+#if defined(__i386__)
 	/* some desctructor registered by the static libcxx causes segfault, this is *probably* fine
 	 * (this has to be called after the dlopen so our function gets called first)
-	 * note: not sure what the issue is on x86, but on aarch64 the issue is that libcxx has
-	 * shadow call stack enabled (probably since android 9) and we're just lucky that it doesn't
-	 * seem to crash in less convenient places (it expects everything is compiled with -ffixed-x18,
-	 * which is not true on Linux without androideabi) */
+	 * note: not sure what the issue is */
 	atexit(exit_with_captured_status);
 #endif
 
 	typeof(int (int, char**)) *main_func = bionic_dlsym(handle, "main");
 	ret = main_func(argc - 1, argv + 1);
-#if defined(__i386__) || defined(__aarch64__)
+#if defined(__i386__)
 	_Exit(ret);
 #endif
 	return ret;
