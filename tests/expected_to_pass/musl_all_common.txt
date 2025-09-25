@@ -52,6 +52,7 @@ string.strxfrm_l_smoke
 sys_mman.mmap_PTRDIFF_MAX
 sys_mman.mremap_PTRDIFF_MAX
 sys_random.getrandom_EFAULT
+sys_stat.fchmodat_AT_SYMLINK_NOFOLLOW_file
 termios.cfgetispeed_cfsetispeed
 termios.cfgetospeed_cfsetospeed
 termios.cfsetspeed

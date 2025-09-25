@@ -35,10 +35,6 @@ fcntl.openat_openat64
 fcntl.posix_fadvise
 fenv.fedisableexcept_fegetexcept
 fenv.feenableexcept_fegetexcept
-fenv.fegetenv_fesetenv_rounding_mode
-fenv.fesetround_fegetround_FE_DOWNWARD
-fenv.fesetround_fegetround_FE_TOWARDZERO
-fenv.fesetround_fegetround_FE_UPWARD
 Fortify1_clang.mempcpy_chk
 Fortify1_clang.stpcpy_chk_max_int_size
 Fortify1_clang.strncat
@@ -70,7 +66,6 @@ iconv.iconv_invalid_converter_EBADF
 iconv.iconv_lossy
 iconv.iconv_lossy_IGNORE
 iconv.iconv_lossy_TRANSLIT
-ifunc.hwcap
 langinfo.invalid
 locale.newlocale_bad_locale_name
 locale.newlocale_invalid_category_mask
@@ -160,7 +155,6 @@ math_h.logbf_intel
 math_h.logb_intel
 math_h.logf_intel
 math_h.log_intel
-math_h.lrint
 math_h.lrintf_intel
 math_h.lrint_intel
 math_h.modff_intel
@@ -178,7 +172,6 @@ math_h.remainderf
 math_h.remainderf_intel
 math_h.remainder_intel
 math_h.remquof
-math_h.rint
 math_h.rintf_intel
 math_h.rint_intel
 math_h.roundf
@@ -255,7 +248,6 @@ sched.sched_setattr_failure
 semaphore.sem_timedwait
 semaphore.sem_wait__sem_post
 setjmp.setjmp_stack
-signal.sigaction
 signal.sigblock_filter
 signal.sigemptyset_invalid
 signal.sigfillset_invalid
@@ -367,8 +359,6 @@ stdlib.strtod
 stdlib.strtod_largest_subnormal
 stdlib.strtof
 stdlib.strtof_2206701
-stdlib.ttyname
-stdlib.ttyname_r
 stdlib.ttyname_r_EINVAL
 stdlib.ttyname_r_ERANGE
 string_nofortify.strerror

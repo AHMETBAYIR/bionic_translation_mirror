@@ -16,26 +16,25 @@ trigger_job:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
   variables:
     GIT_SUBMODULE_STRATEGY: recursive
-  script:
-    - apk add meson gcc musl-dev g++ pc:egl pc:libelf pc:libbsd pc:libunwind bubblewrap tzdata
-    - cd ${CI_PROJECT_DIR} && meson setup build && meson test -C build
   artifacts:
     when: always
     paths:
       - ${CI_PROJECT_DIR}/build
   interruptible: true
 
+# use alpine to test on musl
 .test_job-musl:
   extends: .test_job
+  script:
+    - apk add meson gcc musl-dev g++ pc:egl pc:libelf pc:libbsd pc:libunwind bubblewrap tzdata
+    - cd ${CI_PROJECT_DIR} && meson setup build && meson test -C build
   image:
     name: alpine:edge
-
 
 test_job-musl-x86_64:
   extends: .test_job-musl
   tags:
     - saas-linux-small-amd64
-
 
 test_job-musl-x86:
   extends: .test_job-musl
@@ -48,5 +47,33 @@ test_job-musl-x86:
 
 test_job-musl-aarch64:
   extends: .test_job-musl
+  tags:
+    - saas-linux-small-arm64
+
+# use debian to test on glibc
+.test_job-glibc:
+  extends: .test_job
+  script:
+    - apt update
+    - apt install -y meson pkg-config build-essential libegl-dev libelf-dev libbsd-dev libunwind-dev bubblewrap tzdata
+    - cd ${CI_PROJECT_DIR} && meson setup build && meson test -C build
+  image:
+    name: debian:sid
+
+test_job-glibc-x86_64:
+  extends: .test_job-glibc
+  tags:
+    - saas-linux-small-amd64
+
+test_job-glibc-x86:
+  extends: .test_job-glibc
+  image:
+    docker:
+      platform: linux/i386
+  tags:
+    - saas-linux-small-amd64
+
+test_job-glibc-aarch64:
+  extends: .test_job-glibc
   tags:
     - saas-linux-small-arm64

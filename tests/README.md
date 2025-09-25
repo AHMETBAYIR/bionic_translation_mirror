@@ -1,10 +1,5 @@
 # Tests
 
-## IMPORTANT
-
-The CI currently only tests x86_64, x86, and aarch64 musl. Please check on x86_64 and x86 glibc
-locally; aarch64 glibc will be dealt with later.
-
 ## general explanation
 
 Instead of writing our own tests, we run the bionic testsuite. We don't necessarily need to pass
