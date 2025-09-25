@@ -45,6 +45,21 @@ int bionic___fpclassifyl(b_long_double e)
 	return bionic_fpclassify(e);
 }
 
+#if defined(__GLIBC__) && defined(__aarch64__)
+/* glibc raises the exception naturally, musl and bionic don't; use the musl implementation */
+asm (
+	".global feraiseexcept         \n"
+	".type feraiseexcept,%function \n"
+	"	feraiseexcept:         \n"
+	"	and w0, w0, #0x1f      \n"
+	"	mrs x1, fpsr           \n"
+	"	orr w1, w1, w0         \n"
+	"	msr fpsr, x1           \n"
+	"	mov w0, #0             \n"
+	"	ret                    \n"
+);
+#endif
+
 /* these long double functions are not bionic-exclusive, but they are incompatible on x86(_64) */
 
 #if defined(__i386__) || defined (__x86_64__)
