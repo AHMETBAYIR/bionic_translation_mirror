@@ -93,6 +93,17 @@ char *bionic___strcpy_chk(char *dest, const char *src, size_t dest_len)
 	return strcpy(dest, src);
 }
 
+char * bionic___stpncpy_chk(char* __restrict dest, const char* __restrict src, size_t len, size_t dest_len) {
+	if (__builtin_expect(len > dest_len, 0)) {
+		fprintf(stderr, "stpncpy: prevented write past end of buffer");
+	}
+	return stpncpy(dest, src, len);
+}
+
+#endif
+
+/* these exist in glibc, but have incompatible ABI */
+
 char *bionic___fgets_chk(char *dest, int supplied_size, FILE* stream, size_t dest_len_from_compiler)
 {
 	if (supplied_size < 0) {
@@ -105,15 +116,6 @@ char *bionic___fgets_chk(char *dest, int supplied_size, FILE* stream, size_t des
 	}
 	return fgets(dest, supplied_size, stream);
 }
-
-char * bionic___stpncpy_chk(char* __restrict dest, const char* __restrict src, size_t len, size_t dest_len) {
-	if (__builtin_expect(len > dest_len, 0)) {
-		fprintf(stderr, "stpncpy: prevented write past end of buffer");
-	}
-	return stpncpy(dest, src, len);
-}
-
-#endif
 
 /* these don't exist in glibc either, which also means that by definition their ABI is not copied from glibc */
 
