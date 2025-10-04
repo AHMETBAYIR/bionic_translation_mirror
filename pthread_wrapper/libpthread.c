@@ -454,7 +454,8 @@ static void default_pthread_mutex_init(bionic_mutex_t *mutex)
 		return;
 	}
 
-	assert(0 && "no such default initializer???");
+	// We might have been mapped by another thread in the meantime, otherwise fail
+	assert(IS_MAPPED(mutex) && "no such default initializer???");
 }
 
 int bionic_pthread_mutex_destroy(bionic_mutex_t *mutex)
