@@ -408,9 +408,11 @@ _Unwind_Ptr bionic_dl_unwind_find_exidx(_Unwind_Ptr pc, int *pcount)
 	*pcount = 0;
 	return NULL;
 }
-#elif defined(__aarch64__) || defined(__i386__) || defined(__mips__) || defined(__x86_64__)
+#endif
+
 /* Here, we only have to provide a callback to iterate across all the
- * loaded libraries. gcc_eh does the rest. */
+ * loaded libraries. gcc_eh does the rest. We also use this ourselves,
+ * so compile this even on 32bit arm */
 int bionic_dl_iterate_phdr(int (*cb)(struct dl_phdr_info *info, size_t size, void *data),
 			   void *data)
 {
@@ -430,7 +432,6 @@ int bionic_dl_iterate_phdr(int (*cb)(struct dl_phdr_info *info, size_t size, voi
 	else
 		return dl_iterate_phdr(cb, data);
 }
-#endif
 
 static inline bool is_gnu_hash(soinfo *si)
 {
