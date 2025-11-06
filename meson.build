@@ -46,7 +46,7 @@ dl_bio = shared_library('dl_bio',
 		dependency('dl'),
 		dependency('egl'),
 		dependency('libelf'),
-		dependency('libunwind'), # needed by libc_bio anyway, so might as well use it here
+		dependency('libunwind', version : '>=1.8.0'), # needed by libc_bio anyway, so might as well use it here
 		config,
 	],
 	link_with: [
