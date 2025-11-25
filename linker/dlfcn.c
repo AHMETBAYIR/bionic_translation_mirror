@@ -232,6 +232,9 @@ int bionic_dladdr(const void *addr, Dl_info *info)
 
 int bionic_dlclose(void *handle)
 {
+	if (!do_we_have_this_handle(handle))
+		return dlclose(handle);
+
 #if 0
 	if (is_builtin_lib_handle(handle))
 		return 0;
