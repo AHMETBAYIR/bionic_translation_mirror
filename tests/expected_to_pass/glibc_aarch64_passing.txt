@@ -98,9 +98,6 @@ sys_statvfs.fstatvfs64_smoke
 sys_statvfs.statvfs
 sys_statvfs.statvfs64_smoke
 termios.cfgetispeed_cfsetispeed
-termios.cfsetispeed_EINVAL
-termios.cfsetospeed_EINVAL
-termios.cfsetspeed_EINVAL
 threads.cnd_init__cnd_destroy
 unistd.ftruncate
 unistd.ftruncate64_smoke
