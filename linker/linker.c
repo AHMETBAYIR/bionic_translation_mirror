@@ -811,7 +811,21 @@ static int apkenv_open_library(const char *name, char *fullpath)
 	free(tmp_name);
 
 	for (path = apkenv_ldpaths; *path; path++) {
-		char *ldpath_normalized = realpath(*path, NULL);
+		char *ldpath_normalized = NULL;
+		const char *wildcard = strpbrk(*path, "*");
+		if (wildcard) {
+			char *prefix = strndup(*path, wildcard - *path);
+			char *resolved_prefix = realpath(prefix, NULL);
+			free(prefix);
+			if (resolved_prefix) {
+				ldpath_normalized = malloc(strlen(resolved_prefix) + strlen(wildcard) + 1);
+				strcpy(ldpath_normalized, resolved_prefix);
+				strcat(ldpath_normalized, wildcard);
+				free(resolved_prefix);
+			}
+		} else {
+			ldpath_normalized = realpath(*path, NULL);
+		}
 		if (!ldpath_normalized)
 			ldpath_normalized = strdup(*path);
 		if (path_normalized_name && ldpath_normalized) {
