@@ -52,7 +52,12 @@ static const char *dl_errors[] = {
     [DL_ERR_SYMBOL_NOT_GLOBAL] = "Symbol is not global",
 };
 
-static pthread_mutex_t apkenv_dl_lock = PTHREAD_MUTEX_INITIALIZER;
+#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
+/* Assume musl */
+#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP {{PTHREAD_MUTEX_RECURSIVE}}
+#endif
+
+static pthread_mutex_t apkenv_dl_lock = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 
 static void set_dlerror(int err)
 {
