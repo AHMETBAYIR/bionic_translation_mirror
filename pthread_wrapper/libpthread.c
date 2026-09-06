@@ -5,6 +5,8 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <assert.h>
+#include <limits.h>
+#include <errno.h>
 #include <sys/mman.h>
 #include <setjmp.h>
 
@@ -348,9 +350,22 @@ int bionic_pthread_attr_getstack(const bionic_attr_t *attr, void *stackaddr, siz
 	return pthread_attr_getstack(attr->glibc, stackaddr, stacksize);
 }
 
+#if defined(__LP64__)
+#define BIONIC_PTHREAD_STACK_MIN 16384
+#else
+#define BIONIC_PTHREAD_STACK_MIN 8192
+#endif
+
 int bionic_pthread_attr_setstacksize(bionic_attr_t *attr, size_t stacksize)
 {
 	assert(attr && IS_MAPPED(attr));
+	
+	if (stacksize < BIONIC_PTHREAD_STACK_MIN)
+		return EINVAL;
+
+	if (stacksize < PTHREAD_STACK_MIN)
+		stacksize = PTHREAD_STACK_MIN;
+
 	return pthread_attr_setstacksize(attr->glibc, stacksize);
 }
 
