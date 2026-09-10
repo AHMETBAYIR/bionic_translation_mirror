@@ -287,8 +287,6 @@ stdio_nofortify.snprintf_w_arguments_reordering
 stdio_nofortify.snprintf_w_base
 stdio_nofortify.snprintf_wf_arguments_reordering
 stdio_nofortify.snprintf_wf_base
-stdio_nofortify.sscanf_mc
-stdio_nofortify.sscanf_mlc
 stdio_nofortify.sscanf_swscanf
 stdio_nofortify.sscanf_w_combination
 stdio_nofortify.swprintf_1$ju_UINTMAX_MAX
@@ -323,8 +321,6 @@ stdio.snprintf_w_arguments_reordering
 stdio.snprintf_w_base
 stdio.snprintf_wf_arguments_reordering
 stdio.snprintf_wf_base
-stdio.sscanf_mc
-stdio.sscanf_mlc
 stdio.sscanf_swscanf
 stdio.sscanf_w_combination
 stdio.swprintf_1$ju_UINTMAX_MAX

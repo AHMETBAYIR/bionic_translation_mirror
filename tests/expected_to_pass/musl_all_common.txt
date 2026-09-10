@@ -55,7 +55,6 @@ sys_random.getrandom_EFAULT
 sys_stat.fchmodat_AT_SYMLINK_NOFOLLOW_file
 termios.cfgetispeed_cfsetispeed
 termios.cfgetospeed_cfsetospeed
-termios.cfsetspeed
 termios.tcgetwinsize_tcsetwinsize
 termios.tcgetwinsize_tcsetwinsize_invalid
 time.bug_31339449
