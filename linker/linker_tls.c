@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "linker_tls.h"
 
@@ -81,25 +82,40 @@ size_t __tls_register_module(void *template_base, size_t template_size, size_t s
 	return slot;
 }
 
+struct thread_modules_table
+{
+	size_t count;
+	void *table[];
+};
+
 /* look up TLS module for current thread */
 void *__tls_get_module(size_t slot)
 {
 	pthread_once(&tls_module_key_once, create_tls_module_key);
 
-	// Fetch or create per-thread module tracking
-	void **thread_modules = pthread_getspecific(tls_module_key);
-	if (!thread_modules) {
-		thread_modules = calloc(global_module_registry.count, sizeof(void *));
+	// Fetch or create/grow per-thread module tracking
+	struct thread_modules_table *thread_modules = pthread_getspecific(tls_module_key);
+	if (!thread_modules || thread_modules->count < global_module_registry.count) {
+		size_t new_size = sizeof(*thread_modules) + sizeof(thread_modules->table[0]) * global_module_registry.count;
+		bool need_init = !thread_modules;
+
+		thread_modules = realloc(thread_modules, new_size);
 		if (!thread_modules)
 			return NULL;
+
+		if (need_init)
+			thread_modules->count = 0;
+
+		while (thread_modules->count < global_module_registry.count)
+			thread_modules->table[thread_modules->count++] = NULL;
 
 		pthread_setspecific(tls_module_key, thread_modules);
 	}
 
-	if (!thread_modules[slot]) {
-		if (slot >= global_module_registry.count)
-			return NULL;
+	if (slot >= thread_modules->count)
+		return NULL;
 
+	if (!thread_modules->table[slot]) {
 		tls_module_desc_t desc = global_module_registry.modules[slot];
 
 		// Allocate thread-local storage for this module
@@ -117,17 +133,11 @@ void *__tls_get_module(size_t slot)
 		memset(tls_block + desc.template_size, 0, desc.size - desc.template_size);
 
 		// Store the allocated TLS block for this thread
-		thread_modules[slot] = tls_block;
+		thread_modules->table[slot] = tls_block;
 	}
 
-	return thread_modules[slot];
+	return thread_modules->table[slot];
 }
-
-struct tls_index
-{
-	size_t module;
-	size_t offset;
-};
 
 /* this is called by the .so with the module_id (== slot) that we've put in during relocation */
 #if defined(__i386__)

@@ -31,6 +31,12 @@ wrapper = static_library('wrapper',
 	]
 )
 
+dl_bio_architecture_sources = []
+
+if (host_machine.cpu_family() == 'aarch64')
+	dl_bio_architecture_sources += 'linker/aarch64/tlsdesc_resolver.S'
+endif
+
 dl_bio = shared_library('dl_bio',
 	sources: [
 		'linker/dlfcn.c',
@@ -38,7 +44,8 @@ dl_bio = shared_library('dl_bio',
 		'linker/linker_environ.c',
 		'linker/linker_tls.c',
 		'linker/rt.c',
-		'linker/strlcpy.c'
+		'linker/strlcpy.c',
+                dl_bio_architecture_sources
 	],
 	version: '0.0.1', # this is not just a simple API shim, this is a shim dynamic linker with patches to aid us in our goals; it's possible, if unlikely, that the ABI will change
 	install: true,

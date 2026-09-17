@@ -364,6 +364,12 @@ static void apkenv_free_info(soinfo *si)
 
 	TRACE("%5d name %s: freeing soinfo @ %p\n", apkenv_pid, si->name, si);
 
+	while (si->tls_index_list != NULL) {
+		struct tls_index_list *prev = si->tls_index_list;
+		si->tls_index_list = si->tls_index_list->next;
+		free(prev);
+	}
+
 	for (trav = apkenv_solist; trav != NULL; trav = trav->next) {
 		if (trav == si)
 			break;
@@ -2012,9 +2018,20 @@ static int apkenv_reloc_library(soinfo *si, REL_TYPE *rel, size_t count)
 			TRACE_TYPE(RELO, "RELO TLS_TPREL64 *** %p <- %p - %p\n",
 				   (void *)reloc, (void *)(sym_addr + get_addend(rel)), (void *)rel->r_offset);
 			break;
-		case R_AARCH64_TLS_DTPREL32:
-			TRACE_TYPE(RELO, "RELO TLS_DTPREL32 *** %p <- %p - %p\n",
-				   (void *)reloc, (void *)(sym_addr + get_addend(rel)), (void *)rel->r_offset);
+		case R_AARCH64_TLSDESC:
+			TRACE_TYPE(RELO, "RELO TLSDESC *** %p <- %p - %p\n",
+				   (void *)reloc, (void *)(get_addend(rel)), (void *)rel->r_offset);
+
+			struct tls_index_list *new = malloc(sizeof(*new));
+			new->next = si->tls_index_list;
+			new->index.module = si->tls_slot_id;
+			new->index.offset = get_addend(rel);
+			si->tls_index_list = new;
+
+			struct aarch64_tls_descriptor *tlsdesc = (void *)reloc;
+			tlsdesc->resolver_func = tlsdesc_resolver_dynamic;
+			tlsdesc->index = &new->index;
+
 			break;
 #elif defined(__x86_64__)
 		case R_X86_64_32:

@@ -35,6 +35,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "linker_tls.h"
+
 #define likely(expr)   __builtin_expect((bool)expr, 1)
 #define unlikely(expr) __builtin_expect((bool)expr, 0)
 
@@ -46,11 +48,6 @@
 #undef PAGE_SIZE
 #define PAGE_SIZE 4096
 #define PAGE_MASK 4095
-
-#ifndef R_AARCH64_TLS_DTPREL32
-#define R_AARCH64_TLS_DTPREL32 1031
-#pragma message "The R_AARCH64_TLS_DTPREL32 was not set :("
-#endif
 
 #ifndef R_AARCH64_TLS_TPREL64
 #define R_AARCH64_TLS_TPREL64 1030
@@ -155,6 +152,11 @@ struct symbol_name {
 	uint32_t gnu_hash;
 };
 
+struct tls_index_list {
+	struct tls_index_list *next;
+	struct tls_index index;
+};
+
 struct soinfo {
 	const char name[SOINFO_NAME_LEN];
 	ElfW(Phdr) *phdr;
@@ -240,6 +242,8 @@ struct soinfo {
 	/* apkenv stuff */
 	char fullpath[SOINFO_NAME_LEN];
 	size_t tls_slot_id;
+
+	struct tls_index_list *tls_index_list;
 };
 
 extern soinfo apkenv_libdl_info;
