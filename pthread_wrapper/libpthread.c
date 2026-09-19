@@ -602,6 +602,26 @@ bionic_pthread_cond_wait(bionic_cond_t *cond, bionic_mutex_t *mutex) {
 	return pthread_cond_wait(cond->glibc, mutex->glibc);
 }
 
+int bionic_pthread_cond_clockwait(bionic_cond_t *cond, bionic_mutex_t *mutex, clockid_t clock_id, const struct timespec *abs_timeout) {
+	assert(cond && mutex);
+	INIT_IF_NOT_MAPPED(cond, default_pthread_cond_init);
+	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
+#ifdef __GLIBC__
+	return pthread_cond_clockwait(cond->glibc, mutex->glibc, clock_id, abs_timeout);
+#else /* musl */
+	/*
+	 * FIXME: This is a bit ugly but musl doesn't implement _clockwait yet.
+	 * Instead we just patch the cond manually to update the clock type,
+	 * which is a TERRIBLE idea but what else can we do...
+	 */
+	clockid_t old_clock = cond->glibc->__u.__i[4]; /* _c_clock */
+	cond->glibc->__u.__i[4] = clock_id;
+	int ret = pthread_cond_timedwait(cond->glibc, mutex->glibc, abs_timeout);
+	cond->glibc->__u.__i[4] = old_clock;
+	return ret;
+#endif
+}
+
 int bionic_pthread_cond_timedwait(bionic_cond_t *cond, bionic_mutex_t *mutex, const struct timespec *abs_timeout)
 {
 	assert(cond && mutex);
