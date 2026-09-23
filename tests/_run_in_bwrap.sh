@@ -73,7 +73,7 @@ LD_LIBRARY_PATH=${BUILDDIR_PATH}${BUILDDIR_PATH:+":"}${LIBRARY_PATHS} BIONIC_LD_
        --bind /home /home \
        --bind /lib /lib \
        --bind-try /lib64 /lib64 \
-       --bind /proc /proc \
+       --proc /proc \
        --bind /run /run \
        --bind /sys /sys \
        --bind /tmp /tmp \
