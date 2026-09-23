@@ -75,7 +75,14 @@ dl_bio = shared_library('dl_bio',
 
 pthread_bio = shared_library('pthread_bio',
 	sources: [
-		'pthread_wrapper/libpthread.c'
+		'pthread_wrapper/attr.c',
+		'pthread_wrapper/condattr.c',
+		'pthread_wrapper/cond.c',
+		'pthread_wrapper/libpthread.c',
+		'pthread_wrapper/mutexattr.c',
+		'pthread_wrapper/mutex.c',
+		'pthread_wrapper/rwlock.c',
+		'pthread_wrapper/sem.c',
 	],
 	soversion: 0, # we're shimming a stable ABI; this should never need to change
 	install: true,
