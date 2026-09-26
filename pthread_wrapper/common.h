@@ -19,33 +19,39 @@
 
 typedef struct {
 	union {
+		struct {
 #if defined(__LP64__)
-		int32_t __private[10];
+			int32_t __private[10];
 #else
-		int32_t __private[1];
+			int32_t __private[1];
 #endif
+                } bionic;
 		pthread_mutex_t *glibc;
 	};
 } bionic_mutex_t;
 
 typedef struct {
 	union {
+		struct {
 #if defined(__LP64__)
-		int32_t __private[12];
+			int32_t __private[12];
 #else
-		int32_t __private[1];
+			int32_t __private[1];
 #endif
+		} bionic;
 		pthread_cond_t *glibc;
 	};
 } bionic_cond_t;
 
 typedef struct {
 	union {
-		#if defined(__LP64__)
-		  int32_t __private[14];
-		#else
-		  int32_t __private[10];
-		#endif
+		struct {
+#if defined(__LP64__)
+			int32_t __private[14];
+#else
+			int32_t __private[10];
+#endif
+		} bionic;
 		pthread_rwlock_t *glibc;
 	};
 } bionic_rwlock_t;
@@ -87,14 +93,18 @@ typedef struct {
 
 typedef struct {
 	union {
-		long __private;
+		struct {
+			long __private;
+                } bionic;
 		pthread_mutexattr_t *glibc;
 	};
 } bionic_mutexattr_t;
 
 typedef struct {
 	union {
-		long __private;
+		struct {
+			long __private;
+                } bionic;
 		pthread_condattr_t *glibc;
 	};
 } bionic_condattr_t;
