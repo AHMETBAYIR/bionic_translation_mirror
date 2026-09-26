@@ -176,7 +176,7 @@ void *bionic_dlsym(void *handle, const char *symbol)
 		}
 	} else if (is_this_our_handle) {
 		found = (soinfo *)handle;
-		sym = apkenv_lookup_in_library(found, symbol);
+		sym = apkenv_lookup_in_library(&found, symbol);
 	} else {
 		sym = 0;
 	}

@@ -633,11 +633,31 @@ done:
 }
 
 /* This is used by dl_sym().  It performs symbol lookup only within the
-   specified soinfo object and not in any of its dependencies.
+   specified soinfo object and in any of its dependencies.
  */
-ElfW(Sym) * apkenv_lookup_in_library(soinfo *si, const char *name)
+ElfW(Sym) * apkenv_lookup_in_library(soinfo **found, const char *name)
 {
-	return apkenv__elf_lookup(si, &(struct symbol_name){ .name = name });
+	soinfo *si = *found;
+	ElfW(Sym) *s = apkenv__elf_lookup(si, &(struct symbol_name){ .name = name });
+	if (s)
+		return s;
+
+	if (si->dynamic) {
+		for (ElfW(Dyn) *d = si->dynamic; d->d_tag != DT_NULL; d++) {
+			if (d->d_tag == DT_NEEDED) {
+				soinfo *lsi = (soinfo *)d->d_un.d_val;
+				if (apkenv_validate_soinfo(lsi)) {
+					s = apkenv_lookup_in_library(&lsi, name);
+					if (s) {
+						*found = lsi;
+						return s;
+					}
+				}
+			}
+		}
+	}
+
+	return NULL;
 }
 
 /* This is used by dl_sym().  It performs a global symbol lookup.
@@ -1517,9 +1537,10 @@ soinfo *apkenv_find_library(const char *name, const bool try_glibc, int glibc_fl
 		return NULL;
 
 	if (!strcmp(bname, "libstdc++.so")) {
-		ElfW(Sym) *sym = apkenv_lookup_in_library(si, "__cxa_demangle");
+		soinfo *found = si;
+		ElfW(Sym) *sym = apkenv_lookup_in_library(&found, "__cxa_demangle");
 		if (sym && ELF_ST_BIND(sym->st_info) == STB_GLOBAL && sym->st_shndx != 0)
-			wrapper_set_cpp_demangler((void *)(intptr_t)(sym->st_value + si->base));
+			wrapper_set_cpp_demangler((void *)(intptr_t)(sym->st_value + found->base));
 	}
 
 	return si;
