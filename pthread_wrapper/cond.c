@@ -46,8 +46,7 @@ int bionic_pthread_cond_signal(bionic_cond_t *cond)
 	return pthread_cond_signal(cond->glibc);
 }
 
-int
-bionic_pthread_cond_wait(bionic_cond_t *cond, bionic_mutex_t *mutex) {
+int bionic_pthread_cond_wait(bionic_cond_t *cond, bionic_mutex_t *mutex) {
 	assert(cond && mutex);
 	INIT_IF_NOT_MAPPED(cond, default_pthread_cond_init);
 	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
@@ -82,35 +81,29 @@ int bionic_pthread_cond_timedwait(bionic_cond_t *cond, bionic_mutex_t *mutex, co
 	return pthread_cond_timedwait(cond->glibc, mutex->glibc, abs_timeout);
 }
 
+int bionic_pthread_cond_timedwait_monotonic_np(bionic_cond_t *cond, bionic_mutex_t *mutex, const struct timespec *abstime)
+{
+	return bionic_pthread_cond_clockwait(cond, mutex, CLOCK_MONOTONIC, abstime);
+}
+
+/* seems this name was accidentally shipped instead of _np, it was confined to 32bit ABIs when 64bit platform support was added */
+#if !defined(__LP64__)
+int bionic_pthread_cond_timedwait_monotonic(bionic_cond_t *cond, bionic_mutex_t *mutex, const struct timespec *abstime)
+{
+	return bionic_pthread_cond_timedwait_monotonic_np(cond, mutex, abstime);
+}
+#endif
+
 int bionic_pthread_cond_timedwait_relative_np(bionic_cond_t *cond, bionic_mutex_t *mutex, const struct timespec *reltime)
 {
 	assert(cond && mutex && reltime);
 	struct timespec tv;
-	clock_gettime(CLOCK_REALTIME, &tv);
+	clock_gettime(CLOCK_MONOTONIC, &tv);
 	tv.tv_sec += reltime->tv_sec;
 	tv.tv_nsec += reltime->tv_nsec;
 	if (tv.tv_nsec >= 1000000000) {
 		++tv.tv_sec;
 		tv.tv_nsec -= 1000000000;
 	}
-	return bionic_pthread_cond_timedwait(cond, mutex, &tv);
-}
-
-int bionic_pthread_cond_timedwait_monotonic_np(bionic_cond_t *cond, bionic_mutex_t *mutex, const struct timespec *abstime)
-{
-	assert(cond && mutex && abstime);
-	struct timespec tv;
-	clock_gettime(CLOCK_MONOTONIC, &tv);
-	tv.tv_sec += abstime->tv_sec;
-	tv.tv_nsec += abstime->tv_nsec;
-	if (tv.tv_nsec >= 1000000000) {
-		++tv.tv_sec;
-		tv.tv_nsec -= 1000000000;
-	}
-	return bionic_pthread_cond_timedwait(cond, mutex, &tv);
-}
-
-int bionic_pthread_cond_timedwait_monotonic(bionic_cond_t *cond, bionic_mutex_t *mutex, const struct timespec *abstime)
-{
-	return bionic_pthread_cond_timedwait_monotonic_np(cond, mutex, abstime);
+	return bionic_pthread_cond_timedwait_monotonic_np(cond, mutex, &tv);
 }
