@@ -5,15 +5,6 @@
 
 // when __GLIBC__ is not defined, we're assuming musl; can't check to be sure because 🤡
 
-// these are not defined on musl; FIXME: don't rely on these, call pthread_mutex_init
-#ifndef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
-#define PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP {{PTHREAD_MUTEX_RECURSIVE}}
-#endif
-
-#ifndef PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP
-#define PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP {{PTHREAD_MUTEX_ERRORCHECK}}
-#endif
-
 /* These structs have static initializers, so we need to wrap anything that touches them
  * and potentially lazy-init them. */
 

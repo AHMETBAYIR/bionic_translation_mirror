@@ -1,14 +1,51 @@
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 
 #include "common.h"
 
+#define BIONIC_PTHREAD_COND_INITIALIZER (bionic_cond_t){ .bionic = {{0}} }
+#define BIONIC_PTHREAD_COND_INITIALIZER_MONOTONIC_NP (bionic_cond_t){ .bionic = {{1<<1}} }
+
 static void default_pthread_cond_init(bionic_cond_t *cond)
 {
 	assert(cond);
+
+	enum {
+		DEFAULT,
+		MONOTONIC,
+	} matched_static_initializer;
+
+	if (!memcmp(&cond->bionic, &BIONIC_PTHREAD_COND_INITIALIZER, sizeof(cond->bionic))) {
+		/* posix standard static initializer, equivalent to pthread_cond_init with NULL attr */
+		matched_static_initializer = DEFAULT;
+	} else if (!memcmp(&cond->bionic, &BIONIC_PTHREAD_COND_INITIALIZER_MONOTONIC_NP, sizeof(cond->bionic))) {
+		/* non-standard static initializer (not present in glibc or musl) */
+		matched_static_initializer = MONOTONIC;
+	} else {
+		fprintf(stderr, "%s: lazy init failed, content of the struct doesn't match a known static initializer", __func__);
+		exit(1);
+	}
+
 	cond->glibc = mmap(NULL, sizeof(*cond->glibc), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	memset(cond->glibc, 0, sizeof(*cond->glibc));
+
+	switch (matched_static_initializer) {
+		case DEFAULT: {
+			/* the standard static initializer is suppported by glibc and musl, can use that */
+			*cond->glibc = (pthread_cond_t)PTHREAD_COND_INITIALIZER;
+			break;
+		}
+		case MONOTONIC: {
+			/* need to do dynamic init here */
+			pthread_condattr_t attr;
+			pthread_condattr_init(&attr);
+			pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+			pthread_cond_init(cond->glibc, &attr);
+			break;
+		}
+	}
 }
 
 int bionic_pthread_cond_destroy(bionic_cond_t *cond)

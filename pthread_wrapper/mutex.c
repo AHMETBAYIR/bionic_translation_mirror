@@ -1,29 +1,70 @@
 #include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 
 #include "common.h"
 
-static const struct {
-	bionic_mutex_t bionic;
-	pthread_mutex_t glibc;
-} bionic_mutex_init_map[] = {
-	{ .bionic = {{{ ((PTHREAD_MUTEX_NORMAL & 3) << 14) }}}, .glibc = PTHREAD_MUTEX_INITIALIZER },
-	{ .bionic = {{{ ((PTHREAD_MUTEX_RECURSIVE & 3) << 14) }}}, .glibc = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP },
-	{ .bionic = {{{ ((PTHREAD_MUTEX_ERRORCHECK & 3) << 14) }}}, .glibc = PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP },
-};
+#define BIONIC_PTHREAD_MUTEX_INITIALIZER(x) (bionic_mutex_t){ .bionic = {{ ((x & 3) << 14) }} }
 
 void default_pthread_mutex_init(bionic_mutex_t *mutex)
 {
 	assert(mutex);
 
-	for (size_t i = 0; i < ARRAY_SIZE(bionic_mutex_init_map); i++) {
-		if (memcmp(&bionic_mutex_init_map[i].bionic, mutex, sizeof(*mutex)))
-			continue;
+	enum {
+		NORMAL,
+		RECURSIVE,
+		ERRORCHECK,
+	} matched_static_initializer;
 
-		mutex->glibc = mmap(NULL, sizeof(*mutex->glibc), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-		memcpy(mutex->glibc, &bionic_mutex_init_map[i].glibc, sizeof(bionic_mutex_init_map[i].glibc));
-		return;
+	if (!memcmp(&mutex->bionic, &BIONIC_PTHREAD_MUTEX_INITIALIZER(PTHREAD_MUTEX_NORMAL), sizeof(mutex->bionic))) {
+		/* posix standard static initializer, equivalent to pthread_mutex_init with NULL attr */
+		matched_static_initializer = NORMAL;
+	} else if (!memcmp(&mutex->bionic, &BIONIC_PTHREAD_MUTEX_INITIALIZER(PTHREAD_MUTEX_RECURSIVE), sizeof(mutex->bionic))) {
+		/* non-standard static initializer (present in glibc but not musl) */
+		matched_static_initializer = RECURSIVE;
+	} else if (!memcmp(&mutex->bionic, &BIONIC_PTHREAD_MUTEX_INITIALIZER(PTHREAD_MUTEX_ERRORCHECK), sizeof(mutex->bionic))) {
+		/* non-standard static initializer (present in glibc but not musl) */
+		matched_static_initializer = ERRORCHECK;
+	} else {
+		fprintf(stderr, "%s: lazy init failed, content of the struct doesn't match a known static initializer", __func__);
+		exit(1);
+	}
+
+	mutex->glibc = mmap(NULL, sizeof(*mutex->glibc), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+
+	switch (matched_static_initializer) {
+		case NORMAL: {
+			/* the standard static initializer is suppported by glibc and musl, can use that */
+			*mutex->glibc = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+			break;
+		}
+		case RECURSIVE: {
+#ifdef PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP
+			*mutex->glibc = (pthread_mutex_t)PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
+#else /* musl */
+			/* need to do dynamic init here */
+			pthread_mutexattr_t attr;
+			pthread_mutexattr_init(&attr);
+			pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+			pthread_mutex_init(mutex->glibc, &attr);
+#endif
+			break;
+		}
+		case ERRORCHECK: {
+#ifdef PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP
+			*mutex->glibc = (pthread_mutex_t)PTHREAD_ERRORCHECK_MUTEX_INITIALIZER_NP;
+#else /* musl */
+			/* need to do dynamic init here */
+			pthread_mutexattr_t attr;
+			pthread_mutexattr_init(&attr);
+			pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
+			pthread_mutex_init(mutex->glibc, &attr);
+#endif
+			break;
+
+		}
 	}
 
 	// We might have been mapped by another thread in the meantime, otherwise fail
