@@ -20,7 +20,8 @@ static void default_sem_init(bionic_sem_t *sem)
 	// Apparently some android apps (hearthstone) do not call sem_init()
 	assert(sem);
 	sem->glibc = mmap(NULL, sizeof(*sem->glibc), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	memset(sem->glibc, 0, sizeof(*sem->glibc));
+	/* on bionic, zero init is equivalent to this (technically also on glibc and musl, but we shouldn't rely on that) */
+	sem_init(sem->glibc, 0, 0);
 }
 
 int bionic_sem_init(bionic_sem_t *sem, int pshared, unsigned int value)
