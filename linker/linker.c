@@ -632,25 +632,54 @@ done:
 	return NULL;
 }
 
+/* Returns the index of si in the soinfo pool, or -1 if si isn't a soinfo at
+   all. The libdl pseudo-soinfo gets the extra slot SO_MAX.
+ */
+static inline int apkenv_soinfo_slot(soinfo *si)
+{
+	if (si >= apkenv_sopool && si < apkenv_sopool + SO_MAX)
+		return (int)(si - apkenv_sopool);
+	else if (si == &apkenv_libdl_info)
+		return SO_MAX;
+	else
+		return -1;
+}
+
 /* This is used by dl_sym().  It performs symbol lookup only within the
-   specified soinfo object and in any of its dependencies.
+   specified soinfo object and its dependencies in breadth first order.
  */
 ElfW(Sym) * apkenv_lookup_in_library(soinfo **found, const char *name)
 {
-	soinfo *si = *found;
-	ElfW(Sym) *s = apkenv__elf_lookup(si, &(struct symbol_name){ .name = name });
-	if (s)
-		return s;
+	soinfo *queue[SO_MAX + 1];
+	bool visited[SO_MAX + 1] = { false };
+	size_t head = 0;
+	size_t tail = 0;
 
-	if (si->dynamic) {
-		for (ElfW(Dyn) *d = si->dynamic; d->d_tag != DT_NULL; d++) {
-			if (d->d_tag == DT_NEEDED) {
-				soinfo *lsi = (soinfo *)d->d_un.d_val;
-				if (apkenv_validate_soinfo(lsi)) {
-					s = apkenv_lookup_in_library(&lsi, name);
-					if (s) {
-						*found = lsi;
-						return s;
+	int root = apkenv_soinfo_slot(*found);
+	if (root < 0)
+		return NULL;
+
+	visited[root] = true;
+	queue[tail++] = *found;
+
+	while (head < tail) {
+		soinfo *si = queue[head++];
+		ElfW(Sym) *s = apkenv__elf_lookup(si, &(struct symbol_name){ .name = name });
+		if (s) {
+			*found = si;
+			return s;
+		}
+
+		if (si->dynamic) {
+			for (ElfW(Dyn) *d = si->dynamic; d->d_tag != DT_NULL; d++) {
+				if (d->d_tag == DT_NEEDED) {
+					soinfo *lsi = (soinfo *)d->d_un.d_val;
+					int slot = apkenv_soinfo_slot(lsi);
+					if (slot < 0) {
+						DL_ERR("%5d bad DT_NEEDED pointer in %s", apkenv_pid, si->name);
+					} else if (!visited[slot]) {
+						visited[slot] = true;
+						queue[tail++] = lsi;
 					}
 				}
 			}
