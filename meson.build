@@ -1,4 +1,4 @@
-project('android_translation_layer', ['c', 'cpp'], default_options: ['b_lundef=false', 'b_asneeded=false'])
+project('android_translation_layer', ['c', 'cpp'], default_options: ['c_std=gnu23', 'b_lundef=false', 'b_asneeded=false'])
 
 cc = meson.get_compiler('c')
 libm_dep = cc.find_library('m', required : false)
