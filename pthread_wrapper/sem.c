@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
 
@@ -34,6 +35,13 @@ int bionic_sem_init(bionic_sem_t *sem, int pshared, unsigned int value)
 	return sem_init(sem->glibc, pshared, value);
 }
 
+int bionic_sem_getvalue(bionic_sem_t* sem, int* value)
+{
+	assert(sem);
+	INIT_IF_NOT_MAPPED(sem, default_sem_init);
+	return sem_getvalue(sem->glibc, value);
+}
+
 int bionic_sem_post(bionic_sem_t *sem)
 {
 	assert(sem);
@@ -55,9 +63,43 @@ int bionic_sem_trywait(bionic_sem_t *sem)
 	return sem_trywait(sem->glibc);
 }
 
+int bionic_sem_clockwait(bionic_sem_t *restrict sem, clockid_t clock, const struct timespec *restrict abs_timeout)
+{
+	assert(sem && abs_timeout);
+	INIT_IF_NOT_MAPPED(sem, default_sem_init);
+#ifdef __GLIBC__
+	return sem_clockwait(sem->glibc, clock, abs_timeout);
+#else
+	struct timespec converted_abs_timeout;
+	realtime_time_from_monotonic_time(&converted_abs_timeout, abs_timeout);
+	return sem_timedwait(sem->glibc, &converted_abs_timeout);
+#endif
+}
+
 int bionic_sem_timedwait(bionic_sem_t *sem, const struct timespec *abs_timeout)
 {
 	assert(sem && abs_timeout);
 	INIT_IF_NOT_MAPPED(sem, default_sem_init);
 	return sem_timedwait(sem->glibc, abs_timeout);
+}
+
+int bionic_sem_timedwait_monotonic_np(bionic_sem_t* sem, const struct timespec* abs_timeout)
+{
+	return bionic_sem_clockwait(sem, CLOCK_MONOTONIC, abs_timeout);
+}
+
+/* bionic doesn't implement these, so we don't want to call the glibc/musl versions */
+sem_t* bionic_sem_open(const char*, int, ...) {
+	errno = ENOSYS;
+	return SEM_FAILED;
+}
+
+int bionic_sem_close(sem_t*) {
+	errno = ENOSYS;
+	return -1;
+}
+
+int bionic_sem_unlink(const char*) {
+	errno = ENOSYS;
+	return -1;
 }

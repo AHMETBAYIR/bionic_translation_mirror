@@ -92,8 +92,7 @@ int bionic_pthread_mutex_init(bionic_mutex_t *mutex, const bionic_mutexattr_t *a
 	return pthread_mutex_init(mutex->glibc, (attr ? attr->glibc : NULL));
 }
 
-int
-bionic_pthread_mutex_lock(bionic_mutex_t *mutex)
+int bionic_pthread_mutex_lock(bionic_mutex_t *mutex)
 {
 	assert(mutex);
 	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
@@ -112,4 +111,29 @@ int bionic_pthread_mutex_unlock(bionic_mutex_t *mutex)
 	assert(mutex);
 	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
 	return pthread_mutex_unlock(mutex->glibc);
+}
+
+int bionic_pthread_mutex_clocklock(bionic_mutex_t* mutex, clockid_t clock, const struct timespec* abs_timeout)
+{
+	assert(mutex);
+	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
+#ifdef __GLIBC__
+	return pthread_mutex_clocklock(mutex->glibc, clock, abs_timeout);
+#else
+	struct timespec converted_abs_timeout;
+	realtime_time_from_monotonic_time(&converted_abs_timeout, abs_timeout);
+	return pthread_mutex_timedlock(mutex->glibc, &converted_abs_timeout);
+#endif
+}
+
+int bionic_pthread_mutex_timedlock(bionic_mutex_t* mutex, const struct timespec* abs_timeout)
+{
+	assert(mutex);
+	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
+	return pthread_mutex_timedlock(mutex->glibc, abs_timeout);
+}
+
+int bionic_pthread_mutex_timedlock_monotonic_np(bionic_mutex_t* mutex, const struct timespec* abs_timeout)
+{
+	return bionic_pthread_mutex_clocklock(mutex, CLOCK_MONOTONIC, abs_timeout);
 }

@@ -39,6 +39,8 @@ int bionic_pthread_rwlock_init(bionic_rwlock_t *restrict rwlock, const bionic_rw
 	return pthread_rwlock_init(rwlock->glibc, (pthread_rwlockattr_t *)attr);
 }
 
+/* rdlock */
+
 int bionic_pthread_rwlock_rdlock(bionic_rwlock_t *rwlock)
 {
 	assert(rwlock);
@@ -46,16 +48,86 @@ int bionic_pthread_rwlock_rdlock(bionic_rwlock_t *rwlock)
 	return pthread_rwlock_rdlock(rwlock->glibc);
 }
 
-int bionic_pthread_rwlock_unlock(bionic_rwlock_t *rwlock)
+int bionic_pthread_rwlock_tryrdlock(bionic_rwlock_t *rwlock)
 {
 	assert(rwlock);
 	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
-	return pthread_rwlock_unlock(rwlock->glibc);
+	return pthread_rwlock_tryrdlock(rwlock->glibc);
 }
+
+int bionic_pthread_rwlock_clockrdlock(bionic_rwlock_t *restrict rwlock, clockid_t clock, const struct timespec *restrict abs_timeout)
+{
+	assert(rwlock);
+	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+#ifdef __GLIBC__
+	return pthread_rwlock_clockrdlock(rwlock->glibc, clock, abs_timeout);
+#else
+	struct timespec converted_abs_timeout;
+	realtime_time_from_monotonic_time(&converted_abs_timeout, abs_timeout);
+	return pthread_rwlock_timedrdlock(rwlock->glibc, &converted_abs_timeout);
+#endif
+}
+
+
+int bionic_pthread_rwlock_timedrdlock(bionic_rwlock_t *restrict rwlock, const struct timespec *restrict abs_timeout)
+{
+	assert(rwlock);
+	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+	return pthread_rwlock_timedrdlock(rwlock->glibc, abs_timeout);
+}
+
+int bionic_pthread_rwlock_timedrdlock_monotonic_np(bionic_rwlock_t *restrict rwlock, const struct timespec *restrict abs_timeout)
+{
+	return bionic_pthread_rwlock_clockrdlock(rwlock, CLOCK_MONOTONIC, abs_timeout);
+}
+
+/* wrlock */
 
 int bionic_pthread_rwlock_wrlock(bionic_rwlock_t *rwlock)
 {
 	assert(rwlock);
 	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
 	return pthread_rwlock_wrlock(rwlock->glibc);
+}
+
+int bionic_pthread_rwlock_trywrlock(bionic_rwlock_t *rwlock)
+{
+	assert(rwlock);
+	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+	return pthread_rwlock_trywrlock(rwlock->glibc);
+}
+
+int bionic_pthread_rwlock_clockwrlock(bionic_rwlock_t *restrict rwlock, clockid_t clock, const struct timespec *restrict abs_timeout)
+{
+	assert(rwlock);
+	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+#ifdef __GLIBC__
+	return pthread_rwlock_clockwrlock(rwlock->glibc, clock, abs_timeout);
+#else
+	struct timespec converted_abs_timeout;
+	realtime_time_from_monotonic_time(&converted_abs_timeout, abs_timeout);
+	return pthread_rwlock_timedwrlock(rwlock->glibc, &converted_abs_timeout);
+#endif
+
+}
+
+int bionic_pthread_rwlock_timedwrlock(bionic_rwlock_t *restrict rwlock, const struct timespec *restrict abs_timeout)
+{
+	assert(rwlock);
+	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+	return pthread_rwlock_timedwrlock(rwlock->glibc, abs_timeout);
+}
+
+int bionic_pthread_rwlock_timedwrlock_monotonic_np(bionic_rwlock_t *restrict rwlock, const struct timespec *restrict abs_timeout)
+{
+	return bionic_pthread_rwlock_clockwrlock(rwlock, CLOCK_MONOTONIC, abs_timeout);
+}
+
+/* unlock */
+
+int bionic_pthread_rwlock_unlock(bionic_rwlock_t *rwlock)
+{
+	assert(rwlock);
+	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+	return pthread_rwlock_unlock(rwlock->glibc);
 }

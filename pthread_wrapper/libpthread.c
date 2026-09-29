@@ -15,6 +15,37 @@ bool is_mapped(void *mem, const size_t sz)
 	return !mincore(mem, sz, vec);
 }
 
+#ifndef __GLIBC__ // musl
+/* musl doesn't have any way to use mononotic time, not even the POSIX 2024 way.
+ * To be able to use the realtime functions instead, we need to convert the abs_timeout
+ * argument. */
+/* based on monotonic_time_from_realtime_time from bionic */
+#define NS_PER_S 1'000'000'000LL
+void realtime_time_from_monotonic_time(struct timespec *realtime_time, const struct timespec *monotonic_time) {
+	*realtime_time = *monotonic_time;
+
+
+	struct timespec cur_realtime_time;
+	clock_gettime(CLOCK_REALTIME, &cur_realtime_time);
+
+	struct timespec cur_monotonic_time;
+	clock_gettime(CLOCK_MONOTONIC, &cur_monotonic_time);
+
+	realtime_time->tv_nsec -= cur_monotonic_time.tv_nsec;
+	realtime_time->tv_nsec += cur_realtime_time.tv_nsec;
+	if (realtime_time->tv_nsec >= NS_PER_S) {
+		realtime_time->tv_nsec -= NS_PER_S;
+		realtime_time->tv_sec += 1;
+	} else if (realtime_time->tv_nsec < 0) {
+		realtime_time->tv_nsec += NS_PER_S;
+		realtime_time->tv_sec -= 1;
+	}
+	realtime_time->tv_sec -= cur_monotonic_time.tv_sec;
+	realtime_time->tv_sec += cur_realtime_time.tv_sec;
+
+}
+#endif
+
 /* misc */
 
 int bionic_pthread_create(bionic_pthread_t *thread, const bionic_attr_t *attr, void* (*start)(void*), void *arg)

@@ -137,6 +137,10 @@ _Static_assert(sizeof(bionic_rwlockattr_t) == sizeof(pthread_rwlockattr_t), "bio
 // For handling static initialization.
 #define INIT_IF_NOT_MAPPED(x, init) do { if (!IS_MAPPED(x)) init(x); } while(0)
 
+#ifndef __GLIBC__ // musl
+void realtime_time_from_monotonic_time(struct timespec *realtime_time, const struct timespec *monotonic_time);
+#endif
+
 bool is_mapped(void *mem, const size_t sz);
 /* needed by cond.c, not just mutex.c */
 void default_pthread_mutex_init(bionic_mutex_t *mutex);

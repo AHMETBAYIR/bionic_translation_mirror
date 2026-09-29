@@ -107,3 +107,40 @@ int bionic_pthread_attr_getdetachstate(bionic_attr_t *attr, int *detachstate)
 	assert(attr && IS_MAPPED(attr));
 	return pthread_attr_getdetachstate(attr->glibc, detachstate);
 }
+
+int bionic_pthread_attr_getguardsize(const bionic_attr_t *attr, size_t *guardsize)
+{
+	assert(attr && IS_MAPPED(attr));
+	return pthread_attr_getguardsize(attr->glibc, guardsize);
+}
+
+int bionic_pthread_attr_setguardsize(bionic_attr_t *attr, int guardsize)
+{
+	assert(attr && IS_MAPPED(attr));
+	return pthread_attr_setguardsize(attr->glibc, guardsize);
+}
+
+int bionic_pthread_attr_getinheritsched(const bionic_attr_t *restrict attr, int *restrict inherit)
+{
+	assert(attr && IS_MAPPED(attr));
+	return pthread_attr_getinheritsched(attr->glibc, inherit);
+}
+
+int bionic_pthread_attr_setinheritsched(bionic_attr_t *attr, int inherit)
+{
+	assert(attr && IS_MAPPED(attr));
+	return pthread_attr_setinheritsched(attr->glibc, inherit);
+}
+
+int bionic_pthread_attr_getscope(const bionic_attr_t *restrict attr, int *restrict scope)
+{
+	assert(attr && IS_MAPPED(attr));
+	return pthread_attr_getscope(attr->glibc, scope);
+}
+
+int bionic_pthread_attr_setscope(bionic_attr_t *attr, int scope)
+{
+	assert(attr && IS_MAPPED(attr));
+	return pthread_attr_setscope(attr->glibc, scope);
+}
+
