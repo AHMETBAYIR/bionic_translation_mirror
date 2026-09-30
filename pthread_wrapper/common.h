@@ -106,9 +106,9 @@ struct bionic_pthread_cleanup_t {
 	union {
 		struct bionic_pthread_cleanup_t *prev;
 #ifdef __GLIBC__
-		__pthread_unwind_buf_t *glibc;
-#else
-		struct __ptcb *musl;
+		struct _pthread_cleanup_buffer *glibc;
+#else // musl
+		struct __ptcb *glibc;
 #endif
 	};
 	void (*routine)(void*);

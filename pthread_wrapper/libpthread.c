@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <pthread.h>
-#include <setjmp.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -61,41 +61,29 @@ int bionic_pthread_atfork(void (*prepare)(void), void (*parent)(void), void (*ch
 
 /* cleanup */
 
+#ifdef __GLIBC__
+/* unlike musl, glibc doesn't declare these in pthread.h, but they are ABI and have the same semantics */
+extern void _pthread_cleanup_push(struct _pthread_cleanup_buffer *buffer, void (*routine)(void*), void *arg);
+extern void _pthread_cleanup_pop(struct _pthread_cleanup_buffer *buffer, int execute);
+#endif
+
 void bionic___pthread_cleanup_push(struct bionic_pthread_cleanup_t *c, void (*routine)(void*), void *arg)
 {
 	assert(c && routine);
-#ifdef __GLIBC__
-	c->glibc = mmap(NULL, sizeof(*c->glibc), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+
+	c->glibc = malloc(sizeof(*c->glibc));
 	c->routine = routine;
 	c->arg = arg;
 
-	int not_first_call;
-	if ((not_first_call = sigsetjmp((struct __jmp_buf_tag*)(void*)c->glibc->__cancel_jmp_buf, 0))) {
-		routine(arg);
-		__pthread_unwind_next(c->glibc);
-	}
-
-	__pthread_register_cancel(c->glibc);
-#else
-	c->musl = mmap(NULL, sizeof(struct __ptcb), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	c->routine = routine;
-	c->arg = arg;
-	_pthread_cleanup_push(c->musl, routine, arg);
-#endif
+	_pthread_cleanup_push(c->glibc, routine, arg);
 }
 
 void bionic___pthread_cleanup_pop(struct bionic_pthread_cleanup_t *c, int execute)
 {
-#ifdef __GLIBC__
-	assert(c && IS_MAPPED(c)); // TODO - analogically for musl?
-	__pthread_unregister_cancel(c->glibc);
+	assert(c && c->glibc);
 
-	if (execute)
-		c->routine(c->arg);
+	_pthread_cleanup_pop(c->glibc, execute);
 
-	munmap(c->glibc, sizeof(*c->glibc));
-#else
-	_pthread_cleanup_pop(c->musl, execute);
-	munmap(c->musl, sizeof(struct __ptcb));
-#endif
+	free(c->glibc);
+	c->glibc = NULL;
 }
