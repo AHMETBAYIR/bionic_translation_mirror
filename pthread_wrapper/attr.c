@@ -86,15 +86,24 @@ int bionic_pthread_attr_getschedpolicy(bionic_attr_t *attr, int *policy)
 
 int bionic_pthread_attr_setschedparam(bionic_attr_t *attr, const struct sched_param *param)
 {
+#ifndef __GLIBC__ //musl
+	assert(0 && "bionic_pthread_attr_setschedparam: FIXME: struct sched_param needs wrapping on musl");
+#endif
 	assert(attr && IS_MAPPED(attr));
 	return pthread_attr_setschedparam(attr->glibc, param);
 }
 
 int bionic_pthread_attr_getschedparam(bionic_attr_t *attr, struct sched_param *param)
 {
+#ifndef __GLIBC__ //musl
+	assert(0 && "bionic_pthread_attr_getschedparam: FIXME: struct sched_param needs wrapping on musl");
+#endif
 	assert(attr && IS_MAPPED(attr));
 	return pthread_attr_getschedparam(attr->glibc, param);
 }
+
+static_assert(PTHREAD_CREATE_DETACHED == 1);
+static_assert(PTHREAD_CREATE_JOINABLE == 0);
 
 int bionic_pthread_attr_setdetachstate(bionic_attr_t *attr, int detachstate)
 {
@@ -120,17 +129,48 @@ int bionic_pthread_attr_setguardsize(bionic_attr_t *attr, int guardsize)
 	return pthread_attr_setguardsize(attr->glibc, guardsize);
 }
 
+#define BIONIC_PTHREAD_EXPLICIT_SCHED 0
+#define BIONIC_PTHREAD_INHERIT_SCHED 1
+
 int bionic_pthread_attr_getinheritsched(const bionic_attr_t *restrict attr, int *restrict inherit)
 {
 	assert(attr && IS_MAPPED(attr));
-	return pthread_attr_getinheritsched(attr->glibc, inherit);
+	int glibc_inherit;
+	int ret = pthread_attr_getinheritsched(attr->glibc, &glibc_inherit);
+	switch (glibc_inherit) {
+		case PTHREAD_EXPLICIT_SCHED:
+			*inherit = BIONIC_PTHREAD_EXPLICIT_SCHED;
+			break;
+		case PTHREAD_INHERIT_SCHED:
+			*inherit = BIONIC_PTHREAD_INHERIT_SCHED;
+			break;
+		default:
+			*inherit = glibc_inherit;
+			break;
+	}
+	return ret;
 }
 
 int bionic_pthread_attr_setinheritsched(bionic_attr_t *attr, int inherit)
 {
+	int glibc_inherit;
 	assert(attr && IS_MAPPED(attr));
-	return pthread_attr_setinheritsched(attr->glibc, inherit);
+	switch (inherit) {
+		case BIONIC_PTHREAD_EXPLICIT_SCHED:
+			glibc_inherit = PTHREAD_EXPLICIT_SCHED;
+			break;
+		case BIONIC_PTHREAD_INHERIT_SCHED:
+			glibc_inherit = PTHREAD_INHERIT_SCHED;
+			break;
+		default:
+			glibc_inherit = inherit;
+			break;
+	}
+	return pthread_attr_setinheritsched(attr->glibc, glibc_inherit);
 }
+
+static_assert(PTHREAD_SCOPE_SYSTEM == 0);
+static_assert(PTHREAD_SCOPE_PROCESS == 1);
 
 int bionic_pthread_attr_getscope(const bionic_attr_t *restrict attr, int *restrict scope)
 {
