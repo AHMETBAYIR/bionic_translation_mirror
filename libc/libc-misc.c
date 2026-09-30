@@ -1,9 +1,11 @@
 #include <errno.h>
 #include <locale.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 // this seems to not be a stable ABI, so hopefully nobody treats it as such
 // FIXME: move this out into it's own file whenever we get to implementing it more properly
@@ -68,7 +70,8 @@ char *bionic_setlocale(int category, const char *locale)
 	}
 }
 
-char *bionic_getenv(const char *name) {
+char *bionic_getenv(const char *name)
+{
 	if(!name) {
 		printf("!!! NULL passed to %s\n", __func__);
 	}
@@ -91,7 +94,8 @@ char *bionic_getenv(const char *name) {
 #define _GNU_SOURCE
 #endif
 
-char* bionic___gnu_strerror_r(int error_number, char* buf, size_t buf_len) {
+char* bionic___gnu_strerror_r(int error_number, char* buf, size_t buf_len)
+{
 #ifdef __GLIBC__
 	return strerror_r(error_number, buf, buf_len);
 #else // musl, or something else POSIX compliant
@@ -100,4 +104,30 @@ char* bionic___gnu_strerror_r(int error_number, char* buf, size_t buf_len) {
 	errno = saved_errno;
 	return buf;
 #endif
+}
+
+enum android_fdsan_owner_type {
+  ANDROID_FDSAN_OWNER_TYPE_GENERIC_00 = 0,
+  ANDROID_FDSAN_OWNER_TYPE_GENERIC_FF = 255,
+  ANDROID_FDSAN_OWNER_TYPE_FILE = 1,
+  ANDROID_FDSAN_OWNER_TYPE_DIR = 2,
+  ANDROID_FDSAN_OWNER_TYPE_UNIQUE_FD = 3,
+  ANDROID_FDSAN_OWNER_TYPE_FILEINPUTSTREAM = 251,
+  ANDROID_FDSAN_OWNER_TYPE_FILEOUTPUTSTREAM = 252,
+  ANDROID_FDSAN_OWNER_TYPE_RANDOMACCESSFILE = 253,
+  ANDROID_FDSAN_OWNER_TYPE_PARCELFILEDESCRIPTOR = 254,
+};
+
+uint64_t android_fdsan_create_owner_tag(enum android_fdsan_owner_type type, uint64_t tag)
+{
+	return 0;
+}
+
+void android_fdsan_exchange_owner_tag(int fd, uint64_t expected_tag, uint64_t new_tag)
+{
+}
+
+int android_fdsan_close_with_tag(int fd, uint64_t expected_tag)
+{
+	return close(fd);
 }
