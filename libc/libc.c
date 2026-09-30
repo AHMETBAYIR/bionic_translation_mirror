@@ -43,8 +43,20 @@ struct bionic_sigaction {
 	int sa_flags;
 	void (*sa_restorer)(void);
 };
+typedef uint64_t bionic_sigset64_t;
+struct bionic_sigaction64 {
+	union {
+		void (*bsa_handler)(int);
+		void (*bsa_sigaction)(int, void *, void *);
+	};
+	int sa_flags;
+	void (*sa_restorer)(void);
+	bionic_sigset64_t sa_mask;
+};
+typedef struct bionic_sigaction64 _bionic_sigaction64;
 #else // for 64bit arches, `sa_flags` is in a different place
 typedef unsigned long bionic_sigset_t;
+typedef bionic_sigset_t bionic_sigset64_t;
 struct bionic_sigaction {
 	unsigned int sa_flags;
 	union {
@@ -54,6 +66,8 @@ struct bionic_sigaction {
 	bionic_sigset_t sa_mask;
 	void (*sa_restorer)(void);
 };
+
+typedef struct bionic_sigaction _bionic_sigaction64;
 #endif
 
 // Stuff that doesn't exist in glibc
@@ -261,6 +275,18 @@ int bionic_sigaddset(const bionic_sigset_t *set, int sig)
 	return 0;
 }
 
+int bionic_sigaddset64(const bionic_sigset64_t *set, int sig)
+{
+	int bit = sig - 1; // Signal numbers start at 1, but bit positions start at 0.
+	uint64_t *local_set = (uint64_t *)set;
+	if (!set || bit < 0 || bit >= (int)(8 * sizeof(*set))) {
+		errno = EINVAL;
+		return -1;
+	}
+	local_set[bit / 64] |= 1UL << (bit % 64);
+	return 0;
+}
+
 int bionic_sigismember(const bionic_sigset_t *set, int sig)
 {
 	int bit = sig - 1; // Signal numbers start at 1, but bit positions start at 0.
@@ -270,6 +296,17 @@ int bionic_sigismember(const bionic_sigset_t *set, int sig)
 		return -1;
 	}
 	return (int)((local_set[bit / LONG_BIT] >> (bit % LONG_BIT)) & 1);
+}
+
+int bionic_sigismember64(const bionic_sigset64_t *set, int sig)
+{
+	int bit = sig - 1; // Signal numbers start at 1, but bit positions start at 0.
+	const uint64_t *local_set = (const uint64_t *)set;
+	if (!set || bit < 0 || bit >= (int)(8 * sizeof(*set))) {
+		errno = EINVAL;
+		return -1;
+	}
+	return (int)((local_set[bit / 64] >> (bit % 64)) & 1);
 }
 
 int bionic_sigaction(int sig, const struct bionic_sigaction *restrict act, struct bionic_sigaction *restrict oact)
@@ -315,6 +352,56 @@ int bionic_sigaction(int sig, const struct bionic_sigaction *restrict act, struc
 	return ret;
 }
 
+#ifdef __LP64__
+int bionic_sigaction64(int sig, const _bionic_sigaction64 *restrict act, _bionic_sigaction64 *restrict oact)
+{
+	return bionic_sigaction(sig, act, oact);
+}
+#else
+/* TODO: sigismember64 and sigaddset64 don't exist on glibc/musl, what do we do */
+/*int bionic_sigaction64(int sig, const _bionic_sigaction64 *restrict act, _bionic_sigaction64 *restrict oact)
+{
+	verbose("%d, %p, %p", sig, (void *)act, (void *)oact);
+
+	// THREAD_SIGNAL on android used by libbacktrace
+	if (sig == 33)
+		sig = SIGRTMIN;
+
+	struct sigaction goact = {0}, gact = {0};
+	if (act) {
+		gact.sa_handler = act->bsa_handler;
+		gact.sa_flags = act->sa_flags;
+		gact.sa_restorer = act->sa_restorer;
+
+		// delete reserved signals
+		// 32 (__SIGRTMIN + 0)        POSIX timers
+		// 33 (__SIGRTMIN + 1)        libbacktrace
+		// 34 (__SIGRTMIN + 2)        libcore
+		// 35 (__SIGRTMIN + 3)        debuggerd -b
+		assert(35 < SIGRTMAX);
+		for (int signo = 35; signo < SIGRTMAX; ++signo) {
+			if (bionic_sigismember64(&act->sa_mask, signo))
+				sigaddset64(&gact.sa_mask, signo);
+		}
+	}
+
+	const int ret = sigaction(sig, (act ? &gact : NULL), (oact ? &goact : NULL));
+
+	if (oact) {
+		*oact = (_bionic_sigaction64){0};
+		oact->bsa_handler = goact.sa_handler;
+		oact->sa_flags = goact.sa_flags;
+		oact->sa_restorer = goact.sa_restorer;
+
+		for (int signo = SIGRTMIN + 3; signo < SIGRTMAX; ++signo) {
+			if (sigismember64(&goact.sa_mask, signo))
+				bionic_sigaddset64(&oact->sa_mask, signo);
+		}
+	}
+
+	return ret;
+}*/
+#endif
 int bionic___isfinitef(float f)
 {
 	return isfinite(f);
