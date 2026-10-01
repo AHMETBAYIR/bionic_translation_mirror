@@ -113,7 +113,8 @@ math_h.trunc_intel
 mntent.mntent_smoke
 pthread_CondWakeupTest.signal_timedwait_CLOCK_MONOTONIC
 pthread_CondWakeupTest.signal_timedwait_CLOCK_REALTIME
-pthread.pthread_cond_timedwait_timeout
+pthread.pthread_attr_getstack_in_signal_handler
+pthread.pthread_kill__in_signal_handler
 semaphore.sem_timedwait
 stdio.consistent_fpos_t
 stdio.fpos_t_and_seek
