@@ -62,7 +62,8 @@ netdb.getaddrinfo_service_lookup
 netdb.getservbyname
 netdb.getservbyport
 netdb.setservent_resets
-pthread.pthread_rwlockattr_smoke
+pthread.pthread_attr_getstack_in_signal_handler
+pthread.pthread_kill__in_signal_handler
 signal.sigdelset_invalid
 stdio.fread_int_overflow
 stdio.fseek_overflow_32bit
