@@ -59,6 +59,12 @@ int bionic_pthread_rwlock_clockrdlock(bionic_rwlock_t *restrict rwlock, clockid_
 {
 	assert(rwlock);
 	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+	if (unlikely(clock != CLOCK_MONOTONIC && clock != CLOCK_REALTIME))
+		return EINVAL;
+	int ret = check_timespec(abs_timeout);
+	if (unlikely(ret))
+		return ret;
+
 #ifdef __GLIBC__
 	return pthread_rwlock_clockrdlock(rwlock->glibc, clock, abs_timeout);
 #else
@@ -73,6 +79,10 @@ int bionic_pthread_rwlock_timedrdlock(bionic_rwlock_t *restrict rwlock, const st
 {
 	assert(rwlock);
 	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+	int ret = check_timespec(abs_timeout);
+	if (unlikely(ret))
+		return ret;
+
 	return pthread_rwlock_timedrdlock(rwlock->glibc, abs_timeout);
 }
 
@@ -101,6 +111,10 @@ int bionic_pthread_rwlock_clockwrlock(bionic_rwlock_t *restrict rwlock, clockid_
 {
 	assert(rwlock);
 	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+	int ret = check_timespec(abs_timeout);
+	if (unlikely(ret))
+		return ret;
+
 #ifdef __GLIBC__
 	return pthread_rwlock_clockwrlock(rwlock->glibc, clock, abs_timeout);
 #else
@@ -115,6 +129,10 @@ int bionic_pthread_rwlock_timedwrlock(bionic_rwlock_t *restrict rwlock, const st
 {
 	assert(rwlock);
 	INIT_IF_NOT_MAPPED(rwlock, default_rwlock_init);
+	int ret = check_timespec(abs_timeout);
+	if (unlikely(ret))
+		return ret;
+
 	return pthread_rwlock_timedwrlock(rwlock->glibc, abs_timeout);
 }
 

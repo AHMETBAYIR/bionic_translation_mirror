@@ -117,6 +117,10 @@ int bionic_pthread_mutex_clocklock(bionic_mutex_t* mutex, clockid_t clock, const
 {
 	assert(mutex);
 	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
+	int ret = check_timespec(abs_timeout);
+	if (unlikely(ret))
+		return ret;
+
 #ifdef __GLIBC__
 	return pthread_mutex_clocklock(mutex->glibc, clock, abs_timeout);
 #else
@@ -130,6 +134,10 @@ int bionic_pthread_mutex_timedlock(bionic_mutex_t* mutex, const struct timespec*
 {
 	assert(mutex);
 	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
+	int ret = check_timespec(abs_timeout);
+	if (unlikely(ret))
+		return ret;
+
 	return pthread_mutex_timedlock(mutex->glibc, abs_timeout);
 }
 

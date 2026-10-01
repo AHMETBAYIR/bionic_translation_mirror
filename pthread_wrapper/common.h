@@ -1,7 +1,9 @@
 #include <assert.h>
+#include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdint.h>
+#include <time.h>
 
 // when __GLIBC__ is not defined, we're assuming musl; can't check to be sure because 🤡
 
@@ -127,8 +129,10 @@ _Static_assert(sizeof(bionic_pthread_t) == sizeof(pthread_t), "bionic_pthread_t 
 typedef uint64_t bionic_rwlockattr_t;
 _Static_assert(sizeof(bionic_rwlockattr_t) == sizeof(pthread_rwlockattr_t), "bionic_rwlockattr_t and pthread_rwlockattr_t size mismatch");
 
+#define unlikely(expr) __builtin_expect((bool)(expr), 0)
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+#define NS_PER_S 1'000'000'000LL
 
 // For checking, if our glibc version is mapped to memory.
 // Used for sanity checking and static initialization below.
@@ -144,3 +148,14 @@ void realtime_time_from_monotonic_time(struct timespec *realtime_time, const str
 bool is_mapped(void *mem, const size_t sz);
 /* needed by cond.c, not just mutex.c */
 void default_pthread_mutex_init(bionic_mutex_t *mutex);
+
+static inline int check_timespec(const struct timespec *ts)
+{
+	if (unlikely(ts->tv_nsec < 0 || ts->tv_nsec >= NS_PER_S)) {
+		return EINVAL;
+	}
+	if (unlikely(ts->tv_sec < 0)) {
+		return ETIMEDOUT;
+	}
+	return 0;
+}

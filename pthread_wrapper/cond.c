@@ -94,6 +94,10 @@ int bionic_pthread_cond_clockwait(bionic_cond_t *cond, bionic_mutex_t *mutex, cl
 	assert(cond && mutex);
 	INIT_IF_NOT_MAPPED(cond, default_pthread_cond_init);
 	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
+	int ret = check_timespec(abs_timeout);
+	if (unlikely(ret))
+		return ret;
+
 #ifdef __GLIBC__
 	return pthread_cond_clockwait(cond->glibc, mutex->glibc, clock_id, abs_timeout);
 #else /* musl */
@@ -104,7 +108,7 @@ int bionic_pthread_cond_clockwait(bionic_cond_t *cond, bionic_mutex_t *mutex, cl
 	 */
 	clockid_t old_clock = cond->glibc->__u.__i[4]; /* _c_clock */
 	cond->glibc->__u.__i[4] = clock_id;
-	int ret = pthread_cond_timedwait(cond->glibc, mutex->glibc, abs_timeout);
+	ret = pthread_cond_timedwait(cond->glibc, mutex->glibc, abs_timeout);
 	cond->glibc->__u.__i[4] = old_clock;
 	return ret;
 #endif
@@ -115,6 +119,10 @@ int bionic_pthread_cond_timedwait(bionic_cond_t *cond, bionic_mutex_t *mutex, co
 	assert(cond && mutex);
 	INIT_IF_NOT_MAPPED(cond, default_pthread_cond_init);
 	INIT_IF_NOT_MAPPED(mutex, default_pthread_mutex_init);
+	int ret = check_timespec(abs_timeout);
+	if (unlikely(ret))
+		return ret;
+
 	return pthread_cond_timedwait(cond->glibc, mutex->glibc, abs_timeout);
 }
 
@@ -134,13 +142,17 @@ int bionic_pthread_cond_timedwait_monotonic(bionic_cond_t *cond, bionic_mutex_t 
 int bionic_pthread_cond_timedwait_relative_np(bionic_cond_t *cond, bionic_mutex_t *mutex, const struct timespec *reltime)
 {
 	assert(cond && mutex && reltime);
+	int ret = check_timespec(reltime);
+	if (unlikely(ret))
+		return ret;
+
 	struct timespec tv;
 	clock_gettime(CLOCK_MONOTONIC, &tv);
 	tv.tv_sec += reltime->tv_sec;
 	tv.tv_nsec += reltime->tv_nsec;
-	if (tv.tv_nsec >= 1000000000) {
-		++tv.tv_sec;
-		tv.tv_nsec -= 1000000000;
+	if (tv.tv_nsec >= NS_PER_S) {
+		tv.tv_sec += 1;
+		tv.tv_nsec -= NS_PER_S;
 	}
 	return bionic_pthread_cond_timedwait_monotonic_np(cond, mutex, &tv);
 }

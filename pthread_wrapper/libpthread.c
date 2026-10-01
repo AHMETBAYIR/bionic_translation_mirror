@@ -20,7 +20,6 @@ bool is_mapped(void *mem, const size_t sz)
  * To be able to use the realtime functions instead, we need to convert the abs_timeout
  * argument. */
 /* based on monotonic_time_from_realtime_time from bionic */
-#define NS_PER_S 1'000'000'000LL
 void realtime_time_from_monotonic_time(struct timespec *realtime_time, const struct timespec *monotonic_time) {
 	*realtime_time = *monotonic_time;
 
