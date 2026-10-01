@@ -35,7 +35,7 @@ int bionic_pthread_getattr_np(bionic_pthread_t thread, bionic_attr_t *attr)
 	return pthread_getattr_np((pthread_t)thread, attr->glibc);
 }
 
-int bionic_pthread_attr_settstack(bionic_attr_t *attr, void *stackaddr, size_t stacksize)
+int bionic_pthread_attr_setstack(bionic_attr_t *attr, void *stackaddr, size_t stacksize)
 {
 	assert(attr && IS_MAPPED(attr));
 	return pthread_attr_setstack(attr->glibc, stackaddr, stacksize);
