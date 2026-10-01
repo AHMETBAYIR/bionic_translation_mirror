@@ -34,8 +34,6 @@ math_h.scalbnl
 math_h.significandl
 math_h.tgammal
 mntent.mntent_smoke
-pthread.pthread_attr_setinheritsched__PTHREAD_INHERIT_SCHED__PTHREAD_EXPLICIT_SCHED
-pthread.pthread_setaffinity_np_failure
 pty.bug_28979140
 sched.clone
 sched.sched_setaffinity_failure

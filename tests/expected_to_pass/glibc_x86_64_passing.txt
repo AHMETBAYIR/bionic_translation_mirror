@@ -20,7 +20,8 @@ netdb.endservent_resets
 netdb.getaddrinfo_NULL_host
 netdb.getaddrinfo_service_lookup
 netdb.setservent_resets
-pthread.pthread_rwlockattr_smoke
+pthread.pthread_attr_getstack_in_signal_handler
+pthread.pthread_kill__in_signal_handler
 signal.sigaction
 signal.sigdelset_invalid
 stdio.fread_int_overflow
