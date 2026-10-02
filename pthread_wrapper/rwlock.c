@@ -32,11 +32,19 @@ static void default_rwlock_init(bionic_rwlock_t *rwlock)
 	*rwlock->glibc = (pthread_rwlock_t)PTHREAD_RWLOCK_INITIALIZER;
 }
 
-int bionic_pthread_rwlock_init(bionic_rwlock_t *restrict rwlock, const bionic_rwlockattr_t *restrict attr)
+int bionic_pthread_rwlock_init(bionic_rwlock_t *restrict rwlock, const struct _bionic_rwlockattr_t *restrict attr)
 {
 	assert(rwlock);
 	rwlock->glibc = mmap(NULL, sizeof(*rwlock->glibc), PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	return pthread_rwlock_init(rwlock->glibc, (pthread_rwlockattr_t *)attr);
+	pthread_rwlockattr_t glibc_attr;
+	if (attr) {
+		pthread_rwlockattr_init(&glibc_attr);
+		pthread_rwlockattr_setpshared(&glibc_attr, attr->shared);
+#ifdef __GLIBC__
+		pthread_rwlockattr_setkind_np(&glibc_attr, attr->kind);
+#endif
+	}
+	return pthread_rwlock_init(rwlock->glibc, &glibc_attr);
 }
 
 /* rdlock */

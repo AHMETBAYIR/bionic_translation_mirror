@@ -117,6 +117,14 @@ struct bionic_pthread_cleanup_t {
 	void *arg;
 };
 
+typedef long bionic_rwlockattr_t;
+/* bionic uses bitfields, but this is an implementation detail anyway */
+struct _bionic_rwlockattr_t {
+	bool shared;
+	bool kind;
+};
+_Static_assert(sizeof(struct _bionic_rwlockattr_t) <= sizeof(bionic_rwlockattr_t), "struct _bionic_rwlockattr_t doesn't fit inside bionic_rwlockattr_t");
+
 typedef int bionic_key_t;
 _Static_assert(sizeof(bionic_key_t) == sizeof(pthread_key_t), "bionic_key_t and pthread_key_t size mismatch");
 
@@ -125,9 +133,6 @@ _Static_assert(sizeof(bionic_once_t) == sizeof(pthread_once_t), "bionic_once_t a
 
 typedef long bionic_pthread_t;
 _Static_assert(sizeof(bionic_pthread_t) == sizeof(pthread_t), "bionic_pthread_t and pthread_t size mismatch");
-
-typedef uint64_t bionic_rwlockattr_t;
-_Static_assert(sizeof(bionic_rwlockattr_t) == sizeof(pthread_rwlockattr_t), "bionic_rwlockattr_t and pthread_rwlockattr_t size mismatch");
 
 #define unlikely(expr) __builtin_expect((bool)(expr), 0)
 
