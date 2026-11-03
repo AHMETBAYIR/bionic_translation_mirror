@@ -361,7 +361,6 @@ stdlib.strtof
 stdlib.strtof_2206701
 stdlib.ttyname_r_EINVAL
 stdlib.ttyname_r_ERANGE
-string_nofortify.strerror
 string_nofortify.strerror_concurrent
 string_nofortify.strerror_l
 string_nofortify.strerrorname_np
@@ -373,7 +372,6 @@ string.stpcpy3
 string.stpcpy4
 string.stpcpy_align
 string.stpcpy_overread
-string.strerror
 string.strerror_concurrent
 string.strerror_l
 string.strerrorname_np
