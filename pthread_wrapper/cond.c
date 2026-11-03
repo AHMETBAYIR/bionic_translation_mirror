@@ -25,6 +25,10 @@ static void default_pthread_cond_init(bionic_cond_t *cond)
 		/* non-standard static initializer (not present in glibc or musl) */
 		matched_static_initializer = MONOTONIC;
 	} else {
+		/* We might have been mapped by another thread in the meantime, otherwise fail */
+		if (IS_MAPPED(cond))
+			return;
+
 		fprintf(stderr, "%s: lazy init failed, content of the struct doesn't match a known static initializer", __func__);
 		exit(1);
 	}

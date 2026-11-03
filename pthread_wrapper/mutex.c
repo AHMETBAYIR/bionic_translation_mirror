@@ -28,6 +28,10 @@ void default_pthread_mutex_init(bionic_mutex_t *mutex)
 		/* non-standard static initializer (present in glibc but not musl) */
 		matched_static_initializer = ERRORCHECK;
 	} else {
+		/* We might have been mapped by another thread in the meantime, otherwise fail */
+		if (IS_MAPPED(mutex))
+			return;
+
 		fprintf(stderr, "%s: lazy init failed, content of the struct doesn't match a known static initializer", __func__);
 		exit(1);
 	}
